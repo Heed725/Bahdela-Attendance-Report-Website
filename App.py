@@ -146,9 +146,9 @@ SITES = {
         "device_ip": "217.29.138.128:4373",
         "username": "admin",
         "password": "Bahdela01",
-        "dept_order": ["Oil","Supermarket","Security","Cleaner","Manager"],
+        "dept_order": ["Oil","Supermarket","Security","Cleaner"],
         "dept_colors": {"Oil":"#4B0082","Supermarket":"#8B0000","Security":"#1A3A5C",
-                        "Cleaner":"#2E6B3E","Manager":"#7B3F00"},
+                        "Cleaner":"#2E6B3E"},
         "employees": {
             "Oil": {
                 "label":"OIL", "shift":"Shifts: 07:00-14:00 | 14:00-19:00 | 19:00-06:00",
@@ -184,13 +184,6 @@ SITES = {
                 "header_hex":"2E6B3E",
                 "members":[
                     "Ladslaus Nestor Andreas",
-                ],
-            },
-            "Manager": {
-                "label":"MANAGER", "shift":"Shift: 08:00 - 17:00",
-                "header_hex":"7B3F00",
-                "members":[
-                    "Maryam Yahya Ally",
                 ],
             },
         },
@@ -251,64 +244,50 @@ SITES = {
 
     "Puma Survey": {
         "label": "Puma Survey (Savoh PUMA Sheli)",
-        "device_ip": "41.59.166.115:4378",
+        "device_ip": "102.205.250.241:4378",
         "username": "admin",
         "password": "Bahdela01",
-        "dept_order": ["Oil","Supermarket","Security","Cleaner","Wakala","Manager"],
-        "dept_colors": {"Oil":"#4B0082","Supermarket":"#8B0000","Security":"#1A3A5C",
-                        "Cleaner":"#2E6B3E","Wakala":"#8B4500","Manager":"#7B3F00"},
+        "dept_order": ["Oil","Cleaning","Supervisors","Wakala"],
+        "dept_colors": {
+            "Oil":"#4B0082",
+            "Cleaning":"#2E6B3E",
+            "Supervisors":"#7B3F00",
+            "Wakala":"#8B4500",
+        },
         "employees": {
             "Oil": {
                 "label":"OIL", "shift":"Shifts: 07:00-14:00 | 14:00-18:00 | 19:00-06:00",
                 "header_hex":"4B0082",
                 "members":[
-                    "Abdallah Ally Abdallah","Abdul Amir Mwishaha","Abuu Jafari Salehe",
-                    "Baraka Raymond Daa","Fikirini Rashidi Mussa","France John Mapunda",
-                    "Hamisi Abdul Siraji","Haruna Muhamedi Haruna","Haruni Kenedy Saimoni",
-                    "Hassani Hashimu Mpasule","Issa Ally Juma","Jasmin Warid Idd",
-                    "Mshija Juma Lukuba","Mustani Juberi Ngoda","Siraji Yassini Siraji",
-                    "William Joisack Maliselo","Yahya Mwahimu Abdul","Yassini Siraji Athumani",
-                    "Zulfa Saidi Mkamba","Juma Mussa Juma",
+                    "Abdul Abbas Bajuni","Waziri Hatibu Waziri","Swed Khalfan Kailo",
+                    "Issa Ally Juma","Zulfa Rashid Mkamba","Yassini Siraji Athumani",
+                    "Yahya Mwahimu Abdul","William Joisack Maliselo","Siraji Yassini Siraji",
+                    "Mustani Juberi Ngoda","Mshija Juma Lukuba","Jasmin Warid Idd",
+                    "Hassani Hashimu Mpasule","Haruni Kenedy Saimoni","Haruna Muhamedi Haruna",
+                    "Hamisi Abdull Siraji","France John Mapunda","Fikirini Rashidi Mussa",
+                    "Baraka Raymond Daa","Abuu Jafari Salehe","Abdul Amir Mwishaha",
+                    "Abdallah Ally Abdallah",
                 ],
             },
-            "Supermarket": {
-                "label":"SUPERMARKET", "shift":"Shifts: 08:00-17:00 | 17:00-07:00",
-                "header_hex":"8B0000",
-                "members":[
-                    "Mohamedi Mwishehe Bakari","Msabaha Ally Msabaha","Nesha Habib Losiri",
-                    "Rajabu Ijumaa Hizza","Ramadhan Mohamed Yusuph","Ramadhani Abdallah Ally",
-                    "Ramadhani Hassani Ali","Rashidi Majau Masai","Sabrina Sad Rashid",
-                    "Shaban Rajab Athuman","Shamira Mohamedi Hassani","Yunus Mohamed Zahoro",
-                    "Zainabu Omary Ngitu","Zuena Siraji Sharhabilly",
-                ],
-            },
-            "Security": {
-                "label":"SECURITY", "shift":"Shift: 09:00 - 09:00 (24 Hrs)",
-                "header_hex":"1A3A5C",
-                "members":[],
-            },
-            "Cleaner": {
-                "label":"CLEANER (HOUSE KEEPING)", "shift":"Shifts: 08:00-17:00 | 17:00-08:00",
+            "Cleaning": {
+                "label":"CLEANING / HOUSEKEEPING", "shift":"Shift: 08:00 - 17:00",
                 "header_hex":"2E6B3E",
                 "members":[
-                    "Makenya Juma Makenya","Sawumu Omary Mwalimu","Shabani Jafari Sobo",
-                    "Tabaraka Mohamedi Makwati","Thuweni Abdallah Hamadi","Yunus Mohamed Zahoro",
-                    "Zainabu Omary Ngitu",
+                    "Shabani Jafari Sobo","Saumu Omary Mwalimu","Makenya Juma Makenya",
+                ],
+            },
+            "Supervisors": {
+                "label":"SUPERVISORS / MANAGEMENT", "shift":"Shift: 08:00 - 17:00",
+                "header_hex":"7B3F00",
+                "members":[
+                    "Omar Abdallah Bahdela","Donald Gasper Kalafya",
                 ],
             },
             "Wakala": {
                 "label":"WAKALA", "shift":"Shift: 08:00 - 17:00",
                 "header_hex":"8B4500",
                 "members":[
-                    "Fatma Said Semfuko","Mohamed Kombo Mwinyikambi","Mwanaiddy Ally Ramadhani",
-                ],
-            },
-            "Manager": {
-                "label":"MANAGER / OIL & GAS", "shift":"Shift: 08:00 - 17:00",
-                "header_hex":"7B3F00",
-                "members":[
-                    "Donald Gasper Kalafya","Hamisi Mzee Juma","Omar Mohamed Bahdela",
-                    "Said Bunu Mohamed","Said Abdalahman Kilindo",
+                    "Mwanaiddy Ally Ramadhani","Mohamed Kombo Mwinyikambi","Fatma Said Semfuko",
                 ],
             },
         },
@@ -347,6 +326,34 @@ SITES = {
         },
     },
 }
+
+# ── HARD CONFIG CLEANUP ──────────────────────────────────────
+def sanitize_puma_upanga_config():
+    """Keep Upanga Manager-free and ensure Maryam appears once in Supermarket."""
+    upanga = SITES.get("Puma Upanga", {})
+    employees = upanga.get("employees", {})
+
+    # Remove the retired Manager department from every configuration source.
+    employees.pop("Manager", None)
+    upanga["dept_order"] = [
+        dept for dept in upanga.get("dept_order", []) if dept != "Manager"
+    ]
+    upanga.get("dept_colors", {}).pop("Manager", None)
+
+    # Remove Maryam from all Upanga groups first, then add her once to Supermarket.
+    maryam = "Maryam Yahya Ally"
+    for department in employees.values():
+        department["members"] = [
+            name for name in department.get("members", [])
+            if name.strip().casefold() != maryam.casefold()
+        ]
+
+    supermarket = employees.get("Supermarket")
+    if supermarket is not None:
+        supermarket.setdefault("members", []).append(maryam)
+
+
+sanitize_puma_upanga_config()
 
 # ── Runtime site selection (resolved after sidebar renders) ───
 # These are set dynamically in the UI section below; defaults here
@@ -973,7 +980,9 @@ if "show_settings" not in st.session_state:
 # ── Resolve site config ───────────────────────────────────────
 site_cfg      = SITES[st.session_state.selected_site]
 ALL_EMPLOYEES = site_cfg["employees"]
-DEPT_ORDER    = site_cfg["dept_order"]
+# Puma Upanga must never display the retired Manager department in the UI or reports.
+DEPT_ORDER    = [dk for dk in site_cfg["dept_order"]
+                 if not (st.session_state.selected_site == "Puma Upanga" and dk == "Manager")]
 DEPT_COLORS   = site_cfg["dept_colors"]
 device_ip     = site_cfg["device_ip"]
 username      = site_cfg["username"]
@@ -994,7 +1003,8 @@ with st.sidebar:
 
         site_cfg      = SITES[st.session_state.selected_site]
         ALL_EMPLOYEES = site_cfg["employees"]
-        DEPT_ORDER    = site_cfg["dept_order"]
+        DEPT_ORDER    = [dk for dk in site_cfg["dept_order"]
+                         if not (st.session_state.selected_site == "Puma Upanga" and dk == "Manager")]
         DEPT_COLORS   = site_cfg["dept_colors"]
 
         st.markdown("---")
@@ -1125,7 +1135,7 @@ if st.button("Generate Reports"):
     # ── Summary cards ─────────────────────────────────────────
     progress.progress(0.65)
     total_present=len(rows)
-    all_members=sum(len(d["members"]) for d in ALL_EMPLOYEES.values())
+    all_members=sum(len(ALL_EMPLOYEES[dk]["members"]) for dk in DEPT_ORDER)
     st.markdown("### Summary")
     m1,m2,m3,m4,m5=st.columns(5)
     m1.metric("Days", num_days)
