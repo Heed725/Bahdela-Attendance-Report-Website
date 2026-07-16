@@ -146,20 +146,46 @@ SITES = {
         "device_ip": "217.29.138.128:4373",
         "username": "admin",
         "password": "Bahdela01",
-        "dept_order": ["Oil","Supermarket","Security","Cleaner"],
-        "dept_colors": {"Oil":"#4B0082","Supermarket":"#8B0000","Security":"#1A3A5C",
-                        "Cleaner":"#2E6B3E"},
+        "dept_order": [
+            "Oil", "Oil Supervisor", "Oil Logistics",
+            "Supermarket", "Security", "Cleaner",
+        ],
+        "dept_colors": {
+            "Oil":"#4B0082",
+            "Oil Supervisor":"#7B3F00",
+            "Oil Logistics":"#8B4500",
+            "Supermarket":"#8B0000",
+            "Security":"#1A3A5C",
+            "Cleaner":"#2E6B3E",
+        },
         "employees": {
             "Oil": {
                 "label":"OIL", "shift":"Shifts: 07:00-14:00 | 14:00-19:00 | 19:00-06:00",
                 "header_hex":"4B0082",
                 "members":[
                     "Abdallah Salehe Kilindo","Abdul Jumbe Yusuf","Aisha Mustapha Losili",
-                    "Ally Selemani Darusi","Asha Abdallah Ngasinda","Athumani Yusuph Sheby",
-                    "Ayubu Salehe Kesi","Bakari Saidi Mchingwi","Bihasanati Saidi Nzige",
-                    "Daudi Rashidi Sharabile","Elibariki Geofrey Mshana","Hamadi Adinani Iddi",
-                    "Hamlati Shaibu Ghindu","Jamali Sadi Kilindo","Juma Mussa Juma",
-                    "Juma Mwamedi Ngakola","Kelvin Lukemelo Mlowe","Mnyeto Miraji Rashidi",
+                    "Asha Abdallah Ngasinda","Athumani Yusuph Sheby","Ayubu Salehe Kesi",
+                    "Bakari Saidi Mchingwi","Bihasanati Saidi Nzige","Daudi Rashidi Sharabile",
+                    "Elibariki Geofrey Mshana","Hamadi Adinani Iddi","Hamlati Shaibu Ghindu",
+                    "Jamali Sadi Kilindo","Juma Mussa Juma","Juma Mwamedi Ngakola",
+                    "Kelvin Lukemelo Mlowe","Mnyeto Miraji Rashidi",
+                    "Ramadhani Abdallah Ally","Hassani Muhidini Masenga",
+                    "Rashidi Majau Masai","Ramadhan Mohamed Yusuph",
+                    "Rajabu Ijumaa Hizza","Nesha Habib Losiri","Msabaha Ally Msabaha",
+                ],
+            },
+            "Oil Supervisor": {
+                "label":"OIL SUPERVISOR", "shift":"Shifts: 06:00-18:00 | 18:00-06:00",
+                "header_hex":"7B3F00",
+                "members":[
+                    "Ally Selemani Darusi","Thuweni Abdallah Hamadi","Hamisi Mzee Juma",
+                ],
+            },
+            "Oil Logistics": {
+                "label":"OIL LOGISTICS", "shift":"Shift: 08:00 - 17:00",
+                "header_hex":"8B4500",
+                "members":[
+                    "Said Bunu Mohamed",
                 ],
             },
             "Supermarket": {
@@ -170,20 +196,22 @@ SITES = {
                     "Hadija Yasin Siraji","Happy Edwin Ndambo","Husna Ally Juma",
                     "Iddy Sufiani Msuya","James Josam Mwombeki","Latifa Rehani Abdallah",
                     "Martha Ibrahimu Mussa","Maryam Yahya Ally","Zuena Siraji Sharhabilly",
+                    "Fatuma Alawi Juma",
                 ],
             },
             "Security": {
                 "label":"SECURITY", "shift":"Shift: 09:00 - 09:00 (24 Hrs)",
                 "header_hex":"1A3A5C",
                 "members":[
-                    "Karim Mohamedi Radaki","Mnyeto Miraji Rashidi",
+                    "Karim Mohamedi Radaki","Mnyeto Miraji Rashidi","Abdul Miraj Mkwizu",
                 ],
             },
             "Cleaner": {
                 "label":"CLEANER (HOUSE KEEPING)", "shift":"Shifts: 08:00-17:00 | 17:00-08:00",
                 "header_hex":"2E6B3E",
                 "members":[
-                    "Ladslaus Nestor Andreas",
+                    "Ladslaus Nestor Andreas","Yunus Mohamed Zahoro",
+                    "Tabaraka Mohamedi Makwati",
                 ],
             },
         },
@@ -384,6 +412,18 @@ def checkin_fill(dept_key,check_in):
         if ci < 840:   ss = 360   # morning shift start 06:00 or 07:00
         elif ci < 1140: ss = 840  # afternoon 14:00
         else:           ss = 1140 # night 19:00
+        if ci < ss:      return "C6EFCE","276221"
+        if ci > ss+60:   return "FFCCCC","CC0000"
+        return "FFFFFF","333333"
+    # Oil Supervisor: 06:00-18:00 or 18:00-06:00
+    if dept_key == "Oil Supervisor":
+        ss = 360 if ci < 720 else 1080
+        if ci < ss:      return "C6EFCE","276221"
+        if ci > ss+60:   return "FFCCCC","CC0000"
+        return "FFFFFF","333333"
+    # Oil Logistics: 08:00-17:00
+    if dept_key == "Oil Logistics":
+        ss = 480
         if ci < ss:      return "C6EFCE","276221"
         if ci > ss+60:   return "FFCCCC","CC0000"
         return "FFFFFF","333333"
