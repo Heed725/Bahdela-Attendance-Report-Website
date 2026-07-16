@@ -321,6 +321,36 @@ SITES = {
         },
     },
 
+    "India": {
+        "label": "India",
+        # Store only IP:port because fetch_events() adds the http:// prefix.
+        "device_ip": "102.221.20.46:4440",
+        "username": "admin",
+        "password": "Bahdela01",
+        "dept_order": ["Shop"],
+        "dept_colors": {"Shop":"#8B0000"},
+        "employees": {
+            "Shop": {
+                "label":"SHOP", "shift":"Shift: 08:00 - 16:30",
+                "header_hex":"8B0000",
+                "members":[
+                    "Silivester William Yakobo",
+                    "Athuman Amiri Kanda",
+                    "Ally Salum Sultani",
+                    "Ally Omar Mohamed",
+                    "Ahmed Mohamed Bahdela",
+                ],
+                "member_ids": {
+                    "Silivester William Yakobo":"6005",
+                    "Athuman Amiri Kanda":"6004",
+                    "Ally Salum Sultani":"6003",
+                    "Ally Omar Mohamed":"6002",
+                    "Ahmed Mohamed Bahdela":"6001",
+                },
+            },
+        },
+    },
+
     "Livingstone": {
         "label": "Livingstone (Outside)",
         "device_ip": "217.29.138.29:4735",
@@ -398,6 +428,16 @@ def get_dept(name):
             mp=m.split()
             if len(np)>=2 and len(mp)>=2 and np[0]==mp[0] and np[1]==mp[1]: return dk
     return None
+
+def get_configured_employee_id(dept_key, name):
+    """Return an employee ID configured for an absent/static member, if available."""
+    department = ALL_EMPLOYEES.get(dept_key, {})
+    member_ids = department.get("member_ids", {})
+    wanted = str(name).strip().casefold()
+    for member_name, employee_id in member_ids.items():
+        if str(member_name).strip().casefold() == wanted:
+            return str(employee_id)
+    return "-"
 
 def to_min(t):
     if not t or t=="-": return None
@@ -544,7 +584,7 @@ def build_summary(rows_by_date, start_date, end_date):
                 })
             else:
                 dept_rows.append({
-                    "name":mname,"id":"-",
+                    "name":mname,"id":get_configured_employee_id(dk, mname),
                     "days_present":0,"days_absent":total_days,
                     "avg_in":"-","avg_out":"-","total_hrs":"-","total_mins":0,
                 })
@@ -694,7 +734,8 @@ def build_docx_daily(rows_by_date,start_date,end_date,site="Buguruni"):
                 _wc(rw.cells[5],rec["hours"] if rec["hours"]!="-" else "-",align=WD_ALIGN_PARAGRAPH.CENTER,bg=fill)
             for j,nm in enumerate(pd["absent"]):
                 rw=tbl.add_row(); _rh(rw,0.6)
-                for i,(t,a) in enumerate(zip([len(pd["present"])+j+1,nm,"-","-","-","-"],DAL)):
+                configured_id = get_configured_employee_id(dk, nm)
+                for i,(t,a) in enumerate(zip([len(pd["present"])+j+1,nm,configured_id,"-","-","-"],DAL)):
                     _wc(rw.cells[i],t,color="999999",align=a,bg="EEEEEE")
             doc.add_paragraph().paragraph_format.space_after=Pt(4)
         day+=timedelta(days=1)
@@ -823,8 +864,9 @@ def build_pdf_daily(rows_by_date,start_date,end_date,site="Buguruni"):
                 style.append(("BACKGROUND",(0,ri),(-1,ri),fill))
                 style.append(("BACKGROUND",(3,ri),(3,ri),ci_bg))
             for j,nm in enumerate(pd["absent"]):
+                configured_id = get_configured_employee_id(dk, nm)
                 data.append([RP(str(len(pd["present"])+j+1),size=8,color=CGT,align=TA_CENTER),
-                              RP(nm,size=8,color=CGT),RP("-",size=8,color=CGT,align=TA_CENTER),
+                              RP(nm,size=8,color=CGT),RP(configured_id,size=8,color=CGT,align=TA_CENTER),
                               RP("-",size=8,color=CGT,align=TA_CENTER),RP("-",size=8,color=CGT,align=TA_CENTER),
                               RP("-",size=8,color=CGT,align=TA_CENTER)])
                 ri=len(data)-1
@@ -960,7 +1002,8 @@ def build_xlsx_daily(rows_by_date,start_date,end_date,site="Buguruni"):
                 cur+=1
             for j,nm in enumerate(pd["absent"]):
                 ws.row_dimensions[cur].height=16
-                for i,(val,al) in enumerate(zip([len(pd["present"])+j+1,nm,"-","-","-","-"],AL)):
+                configured_id = get_configured_employee_id(dk, nm)
+                for i,(val,al) in enumerate(zip([len(pd["present"])+j+1,nm,configured_id,"-","-","-"],AL)):
                     cell=ws.cell(cur,i+1,val); cell.font=xf("999999")
                     cell.fill=xfill("EEEEEE"); cell.alignment=xal(al); cell.border=XCB
                 cur+=1
