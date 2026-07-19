@@ -41,14 +41,24 @@ APP_TIMEZONE = timezone(timedelta(hours=3))
 # is useful for local testing and does not affect Streamlit Cloud deployment.
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGO_FILENAMES = ("BAHDELA-logo.png", "bahdela-logo.png", "BAHDELA_logo.png")
+FAVICON_FILENAMES = ("favicon-32x32.png", "favicon.ico", "favicon-16x16.png")
 
-def get_logo_path():
-    candidates = [os.path.join(APP_DIR, name) for name in LOGO_FILENAMES]
-    candidates.extend(os.path.join("/mnt/data", name) for name in LOGO_FILENAMES)
+def _find_app_asset(filenames):
+    """Return the first matching asset stored beside app.py."""
+    candidates = [os.path.join(APP_DIR, name) for name in filenames]
+    candidates.extend(os.path.join("/mnt/data", name) for name in filenames)
     for candidate in candidates:
         if os.path.isfile(candidate):
             return candidate
     return None
+
+
+def get_logo_path():
+    return _find_app_asset(LOGO_FILENAMES)
+
+
+def get_favicon_path():
+    return _find_app_asset(FAVICON_FILENAMES)
 
 
 # A later scan becomes checkout only from the allocated shift ending time.
@@ -71,7 +81,15 @@ if os.environ.get("_APP_LAUNCHED") != "1":
         shell=(sys.platform == "win32"), env=env))
 
 # ── PAGE CONFIG ───────────────────────────────────────────────
-st.set_page_config(page_title="Shift Reports — Multi-Site", layout="wide")
+page_config = {
+    "page_title": "Shift Reports — Multi-Site",
+    "layout": "wide",
+}
+favicon_path = get_favicon_path()
+if favicon_path:
+    page_config["page_icon"] = favicon_path
+
+st.set_page_config(**page_config)
 
 # ── LIGHT-ONLY RESPONSIVE THEME ──────────────────────────────
 BG      = "#FFFFFF"
