@@ -470,7 +470,7 @@ SITES = {
                     "Abdul Abbas Bajuni","Waziri Hatibu Waziri","Swed Khalfan Kailo",
                     "Issa Ally Juma","Zulfa Rashid Mkamba","Yassini Siraji Athumani",
                     "Yahya Mwahimu Abdul","William Joisack Maliselo","Siraji Yassini Siraji",
-                    "Mustani Juberi Ngoda","Mshija Juma Lukuba","Jasmin Warid Idd",
+                    "Mshija Juma Lukuba","Jasmin Warid Idd",
                     "Hassani Hashimu Mpasule","Haruni Kenedy Saimoni","Haruna Muhamedi Haruna",
                     "Hamisi Abdull Siraji","France John Mapunda","Fikirini Rashidi Mussa",
                     "Baraka Raymond Daa","Abuu Jafari Salehe","Abdul Amir Mwishaha",
@@ -488,7 +488,7 @@ SITES = {
                 "label":"SUPERVISORS / MANAGEMENT", "shift":"Shift: 08:00 - 17:00",
                 "header_hex":"7B3F00",
                 "members":[
-                    "Omar Abdallah Bahdela","Donald Gasper Kalafya",
+                    "Omar Abdallah Bahdela","Donald Gasper Kalafya","Mustani Juberi Ngonda",
                 ],
             },
             "Wakala": {
