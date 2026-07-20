@@ -511,7 +511,10 @@ SITES = {
         "dept_colors": {"Shop":"#8B0000"},
         "employees": {
             "Shop": {
-                "label":"SHOP", "shift":"Shift: 08:00 - 17:00",
+                # Display the official shift end as 16:30, but accept an actual
+                # checkout scan made at any time from 16:00 through 17:00.
+                "label":"SHOP", "shift":"Shift: 08:00 - 16:30",
+                "checkout_window":"16:00 - 17:00",
                 "header_hex":"8B0000",
                 "members":[
                     "Silivester William Yakobo",
@@ -661,6 +664,37 @@ def get_shift_window(dept_key, check_in_dt):
     return shift_start, shift_end
 
 
+def get_checkout_window(dept_key, allocated_end):
+    """
+    Return the earliest and latest accepted checkout timestamps.
+
+    Departments without a custom checkout_window continue using the normal rule:
+    checkout starts at the configured shift end and remains valid for the grace
+    period. India Shop configures 16:00-17:00 while displaying a 16:30 shift end.
+    """
+    department = ALL_EMPLOYEES.get(dept_key, {})
+    window_text = str(department.get("checkout_window", "")).strip()
+    matches = SHIFT_TIME_PATTERN.findall(window_text)
+
+    if not matches:
+        return allocated_end, allocated_end + timedelta(hours=CHECKOUT_GRACE_HOURS)
+
+    start_text, end_text = matches[0]
+    start_minute = to_min(start_text)
+    end_minute = to_min(end_text)
+    if start_minute is None or end_minute is None:
+        return allocated_end, allocated_end + timedelta(hours=CHECKOUT_GRACE_HOURS)
+
+    window_day = allocated_end.replace(hour=0, minute=0, second=0, microsecond=0)
+    checkout_start = window_day + timedelta(minutes=start_minute)
+    checkout_end = window_day + timedelta(minutes=end_minute)
+
+    if checkout_end < checkout_start:
+        checkout_end += timedelta(days=1)
+
+    return checkout_start, checkout_end
+
+
 def parse_event_datetime(value):
     """Parse device timestamps and normalize them to Tanzania time."""
     raw = str(value or "").strip()
@@ -773,9 +807,9 @@ def parse_by_day(events, report_start=None, report_end=None):
     """
     Build attendance rows from chronological scans.
 
-    Checkout is accepted only at the allocated shift ending time or later.
-    Repeated scans before shift end are ignored, so checkout and worked hours
-    remain blank when there is no valid checkout scan.
+    Checkout is accepted within the department's configured checkout window.
+    By default, that window begins at the allocated shift end and continues
+    through the normal grace period. Earlier duplicate scans are ignored.
     """
     employee_scans = defaultdict(list)
     employee_names = {}
@@ -801,7 +835,6 @@ def parse_by_day(events, report_start=None, report_end=None):
         employee_scans[employee_id].append(scan_time)
 
     rows = []
-    grace = timedelta(hours=CHECKOUT_GRACE_HOURS)
 
     for employee_id, scans in employee_scans.items():
         scans = sorted(set(scans))
@@ -812,6 +845,10 @@ def parse_by_day(events, report_start=None, report_end=None):
         while index < len(scans):
             check_in_dt = scans[index]
             _, allocated_end = get_shift_window(department_key, check_in_dt)
+            checkout_start, checkout_deadline = get_checkout_window(
+                department_key,
+                allocated_end,
+            )
 
             checkout_dt = None
             checkout_index = None
@@ -821,15 +858,14 @@ def parse_by_day(events, report_start=None, report_end=None):
             while candidate_index < len(scans):
                 candidate = scans[candidate_index]
 
-                # Ignore duplicate/extra scans made before the shift ends.
-                if candidate < allocated_end:
+                # Ignore duplicate/extra scans made before checkout is allowed.
+                if candidate < checkout_start:
                     next_index = candidate_index + 1
                     candidate_index += 1
                     continue
 
-                # The first scan at shift end or later is checkout, provided it
-                # is still reasonably close to that allocated shift.
-                if candidate <= allocated_end + grace:
+                # Accept the first scan inside the configured checkout window.
+                if candidate <= checkout_deadline:
                     checkout_dt = candidate
                     checkout_index = candidate_index
                 break
