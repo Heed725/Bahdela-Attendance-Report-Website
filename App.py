@@ -309,8 +309,11 @@ SITES = {
                 "header_hex":"4B0082",
                 "members":["Abdul Timanya Renatus","Ahmed Ally Mpogo","Azihar Mwijage Mzamiru",
                            "Bashiru Said Mgodoka","Iddi Rashidi Abdallah","Issa Sharahbil Siraji",
-                           "Juma Othmani Issa","Mohamed Abdallah Hamad","Muhsin Oscar Matikila",
-                           "Shali Sebe Bazo","Wilibald Antigon Urio"],
+                           "Juma Othmani Issa","Juma Yahya Bilal","Mohamed Abdallah Hamad",
+                           "Muhsin Oscar Matikila","Shali Sebe Bazo","Wilibald Antigon Urio"],
+                "member_ids": {
+                    "Juma Yahya Bilal":"9089",
+                },
             },
             "Walinzi": {
                 "label":"WALINZI (SECURITY)", "shift":"Shift: 09:00 - 09:00 (24 Hrs)",
