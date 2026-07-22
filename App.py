@@ -415,7 +415,7 @@ SITES = {
                 "members":[
                     "Abdallah Abdi Rashidi","Ally Msabaha Ally","Amina Alawi Juma",
                     "Dotto Sultan Kingalu","Esha Jamali Kessy","Juma Alawi Juma",
-                    "Mahamuod Said Mgawe","Mohamed Abdallah Kambi","Mohamed Ally Mzee",
+                    "Mahamuod Said Mgawe","Mohamed Abdallah Kambi",
                     "Mulla Omari Kadari","Mzee Hamis Kassim","Omari Yusufu Shebly",
                     "Said Ramadhani Mnjama","Salim Siraji Bajuni","Salmin Mdhihiri Yahaya",
                     "Salmu Omari Siraji","Thomas Constans Kereza","Zahoro Rashidi Mbotoni",
@@ -477,8 +477,17 @@ SITES = {
                     "Hassani Hashimu Mpasule","Haruni Kenedy Saimoni","Haruna Muhamedi Haruna",
                     "Hamisi Abdull Siraji","France John Mapunda","Fikirini Rashidi Mussa",
                     "Baraka Raymond Daa","Abuu Jafari Salehe","Abdul Amir Mwishaha",
-                    "Abdallah Ally Abdallah",
+                    "Abdallah Ally Abdallah","Khalfan Suleiman Ali",
+                    "Glory Asajile Mwaipaja","Amiri Siraji Nurdini",
+                    "Albati Donasiani Kitali",
                 ],
+                "member_ids": {
+                    "Khalfan Suleiman Ali":"4011",
+                    "Glory Asajile Mwaipaja":"7011",
+                    "Amiri Siraji Nurdini":"7012",
+                    "Issa Ally Juma":"7013",
+                    "Albati Donasiani Kitali":"7014",
+                },
             },
             "Cleaning": {
                 "label":"CLEANING / HOUSEKEEPING", "shift":"Shift: 08:00 - 17:00",
@@ -492,7 +501,11 @@ SITES = {
                 "header_hex":"7B3F00",
                 "members":[
                     "Omar Abdallah Bahdela","Donald Gasper Kalafya","Mustani Juberi Ngonda",
+                    "Mohamed Ally Mzee",
                 ],
+                "member_ids": {
+                    "Mohamed Ally Mzee":"1409",
+                },
             },
             "Wakala": {
                 "label":"WAKALA", "shift":"Shift: 08:00 - 17:00",
