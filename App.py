@@ -280,9 +280,10 @@ SITES = {
         "device_ip": "217.29.138.10:4376",
         "username": "admin",
         "password": "Bahdela01",
-        "dept_order": ["Shop","Manufactural","Store","Oil","Walinzi"],
+        "dept_order": ["Shop","Manufactural","Store","Oil","Walinzi","Buguruni Masjid"],
         "dept_colors": {"Shop":"#8B0000","Manufactural":"#7B3F00","Store":"#B8860B",
-                        "Oil":"#4B0082","Walinzi":"#555555"},
+                        "Oil":"#4B0082","Walinzi":"#555555",
+                        "Buguruni Masjid":"#00695C"},
         "employees": {
             "Shop": {
                 "label":"SHOP", "shift":"Shift: 08:00 - 16:30", "header_hex":"8B0000",
@@ -320,6 +321,14 @@ SITES = {
                 "header_hex":"1A1A1A",
                 "members":["Anderson Mude Faru","Dickson Dickson Haule","Fadhili Ahmad Abdlaah",
                            "Fikiri Amani Abdallah","John Jofery Kapiki","Shamte Rashid Likwira"],
+            },
+            "Buguruni Masjid": {
+                "label":"BUGURUNI MASJID", "shift":"Shift: 08:30 - 17:00",
+                "header_hex":"00695C",
+                "members":["Jaffari Omari Juma"],
+                "member_ids": {
+                    "Jaffari Omari Juma":"6055",
+                },
             },
         },
     },
