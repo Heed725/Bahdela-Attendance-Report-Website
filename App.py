@@ -339,11 +339,12 @@ SITES = {
         "username": "admin",
         "password": "Bahdela01",
         "dept_order": [
-            "Oil", "Oil Supervisor", "Oil Logistics",
+            "Oil", "Oil Lubricant", "Oil Supervisor", "Oil Logistics",
             "Supermarket", "Security", "Cleaner",
         ],
         "dept_colors": {
             "Oil":"#4B0082",
+            "Oil Lubricant":"#00695C",
             "Oil Supervisor":"#7B3F00",
             "Oil Logistics":"#8B4500",
             "Supermarket":"#8B0000",
@@ -355,16 +356,28 @@ SITES = {
                 "label":"OIL", "shift":"Shifts: 07:00-14:00 | 14:00-19:00 | 19:00-06:00",
                 "header_hex":"4B0082",
                 "members":[
-                    "Abdallah Salehe Kilindo","Abdul Jumbe Yusuf","Aisha Mustapha Losili",
+                    "Abdul Jumbe Yusuf","Aisha Mustapha Losili",
                     "Asha Abdallah Ngasinda","Athumani Yusuph Sheby","Ayubu Salehe Kesi",
                     "Bakari Saidi Mchingwi","Bihasanati Saidi Nzige","Daudi Rashidi Sharabile",
                     "Elibariki Geofrey Mshana","Hamadi Adinani Iddi","Hamlati Shaibu Ghindu",
-                    "Jamali Sadi Kilindo","Juma Mussa Juma","Juma Mwamedi Ngakola",
+                    "Jamali Sadi Kilindo","Juma Mussa Juma",
                     "Kelvin Lukemelo Mlowe","Mnyeto Miraji Rashidi",
                     "Ramadhani Abdallah Ally","Hassani Muhidini Masenga",
                     "Rashidi Majau Masai","Ramadhan Mohamed Yusuph",
                     "Rajabu Ijumaa Hizza","Nesha Habib Losiri","Msabaha Ally Msabaha",
                 ],
+            },
+            "Oil Lubricant": {
+                "label":"OIL LUBRICANT",
+                "shift":"Shifts: 07:00-14:00 | 14:00-19:00 | 19:00-06:00",
+                "header_hex":"00695C",
+                "members":[
+                    "Juma Mwamedi Ngakola","Abdallah Salehe Kilindo",
+                ],
+                "member_ids": {
+                    "Juma Mwamedi Ngakola":"1375",
+                    "Abdallah Salehe Kilindo":"1385",
+                },
             },
             "Oil Supervisor": {
                 "label":"OIL SUPERVISOR", "shift":"Shifts: 06:00-18:00 | 18:00-06:00",
@@ -740,8 +753,8 @@ def parse_event_datetime(value):
 def checkin_fill(dept_key,check_in):
     ci=to_min(check_in)
     if ci is None: return "EEEEEE","999999"
-    # Oil shifts: 06:00(360) or 07:00(420) start, 14:00(840), 19:00(1140)
-    if dept_key in ("Oil",):
+    # Oil and Oil Lubricant shifts: 06:00/07:00 start, 14:00, 19:00
+    if dept_key in ("Oil", "Oil Lubricant"):
         if ci < 840:   ss = 360   # morning shift start 06:00 or 07:00
         elif ci < 1140: ss = 840  # afternoon 14:00
         else:           ss = 1140 # night 19:00
