@@ -541,7 +541,7 @@ SITES = {
 
     "India": {
         "label": "India",
-        # Store only IP:port because fetch_events() adds the http:// prefix.
+        # IP:port is accepted; fetch_events() also supports complete HTTP/HTTPS URLs.
         "device_ip": "102.221.20.46:4440",
         "username": "admin",
         "password": "Bahdela01",
@@ -567,6 +567,117 @@ SITES = {
                     "Ally Salum Sultani":"6003",
                     "Ally Omar Mohamed":"6002",
                     "Ahmed Mohamed Bahdela":"6001",
+                },
+            },
+        },
+    },
+
+    "Kibaha": {
+        "label": "Kibaha",
+        # ngrok HTTPS base address. Do not include the Swagger /doc/index.html path.
+        "device_ip": "https://agent-unsavory-scope.ngrok-free.dev",
+        "username": "admin",
+        "password": "Bahdela01",
+        "dept_order": ["Hardware", "Cleaner", "Secretary", "Oil", "Oil Supervisor"],
+        "dept_colors": {
+            "Hardware":"#1565C0",
+            "Cleaner":"#2E6B3E",
+            "Secretary":"#8B0000",
+            "Oil":"#4B0082",
+            "Oil Supervisor":"#7B3F00",
+        },
+        "employees": {
+            "Hardware": {
+                "label":"HARDWARE",
+                "shift":"Shift: 08:00 - 17:00",
+                "header_hex":"1565C0",
+                "members":[
+                    "Latifa Mohammed Salum",
+                    "Bushiri Hassan Kipita",
+                ],
+                "member_ids": {
+                    "Latifa Mohammed Salum":"5024",
+                    "Bushiri Hassan Kipita":"5023",
+                },
+            },
+            "Cleaner": {
+                "label":"CLEANER",
+                "shift":"Shift: 08:00 - 17:00",
+                "header_hex":"2E6B3E",
+                "members":[
+                    "Zainab Siraj",
+                    "Silvia Cosmas Mtamise",
+                    "Dunia Ally Shomari",
+                ],
+                "member_ids": {
+                    "Zainab Siraj":"5022",
+                    "Silvia Cosmas Mtamise":"5021",
+                    "Dunia Ally Shomari":"5020",
+                },
+            },
+            "Secretary": {
+                "label":"SECRETARY",
+                "shift":"Shift: 08:00 - 17:00",
+                "header_hex":"8B0000",
+                "members":[
+                    "Jamila Ernest Mswao",
+                ],
+                "member_ids": {
+                    "Jamila Ernest Mswao":"5019",
+                },
+            },
+            "Oil": {
+                "label":"OIL",
+                "shift":"Shifts: 06:00-14:00 | 14:00-18:00 | 18:00-06:00",
+                "header_hex":"4B0082",
+                "members":[
+                    "Idd Adnan Idd",
+                    "Warda Said",
+                    "Vendeline Aniseth William",
+                    "Siraj Tenga",
+                    "Siraj Abdul",
+                    "Sheha Shomary Kitanda",
+                    "Shabani Mussa Saidi",
+                    "Nasimu Omary Siraj",
+                    "Mariam Siraj",
+                    "Kasimiri Antony",
+                    "James Patrick Mhanga",
+                    "Khamis Kadulyu Kaswahili",
+                    "Daniel Ibrahim Mwambayle",
+                    "Ally Malozo",
+                    "Ally Hassan Ally",
+                    "Abdulkarim Abdallah Kilindo",
+                ],
+                "member_ids": {
+                    "Idd Adnan Idd":"5018",
+                    "Warda Said":"5017",
+                    "Vendeline Aniseth William":"5016",
+                    "Siraj Tenga":"5015",
+                    "Siraj Abdul":"5014",
+                    "Sheha Shomary Kitanda":"5013",
+                    "Shabani Mussa Saidi":"5012",
+                    "Nasimu Omary Siraj":"5011",
+                    "Mariam Siraj":"5010",
+                    "Kasimiri Antony":"5009",
+                    "James Patrick Mhanga":"5008",
+                    "Khamis Kadulyu Kaswahili":"5007",
+                    "Daniel Ibrahim Mwambayle":"5006",
+                    "Ally Malozo":"5005",
+                    "Ally Hassan Ally":"5004",
+                    "Abdulkarim Abdallah Kilindo":"5003",
+                },
+            },
+            "Oil Supervisor": {
+                "label":"OIL SUPERVISOR",
+                "shift":"Shifts: 06:00-18:00 | 18:00-06:00",
+                "header_hex":"7B3F00",
+                "members":[
+                    "Yahaya Abdallah Msangule",
+                    "Omar Walid Iddi",
+                ],
+                "member_ids": {
+                    "Yahaya Abdallah Msangule":"5002",
+                    "Omar Walid Iddi":"5001",
                 },
             },
         },
@@ -1025,19 +1136,50 @@ def avg_time(tl):
     except: return "-"
 
 # ── FETCH ─────────────────────────────────────────────────────
+def normalize_device_base(device_ip):
+    """Return a clean HTTP/HTTPS base URL for an IP, hostname, or ngrok address."""
+    base = str(device_ip or "").strip().rstrip("/")
+    if not base:
+        raise ValueError("Device address is empty")
+    if not re.match(r"^https?://", base, flags=re.IGNORECASE):
+        base = f"http://{base}"
+    return base
+
+
 def fetch_events(device_ip,username,password,start_date,end_date,progress_cb=None):
-    url=f"http://{device_ip}/ISAPI/AccessControl/AcsEvent?format=json"
+    try:
+        base_url = normalize_device_base(device_ip)
+    except ValueError as exc:
+        return None, str(exc)
+
+    url=f"{base_url}/ISAPI/AccessControl/AcsEvent?format=json"
     auth=HTTPDigestAuth(username,password)
+    headers={"Accept":"application/json"}
+
+    # Suppress the free ngrok browser interstitial while preserving Digest Auth.
+    if "ngrok-free." in base_url.lower():
+        headers["ngrok-skip-browser-warning"] = "true"
+
     all_events,position,page=[],0,1
     while True:
         payload={"AcsEventCond":{"searchID":"1","searchResultPosition":position,
             "maxResults":30,"major":0,"minor":0,
             "startTime":f"{start_date}T00:00:00+03:00",
             "endTime":f"{end_date}T23:59:59+03:00"}}
-        try: r=requests.post(url,auth=auth,json=payload,timeout=15,verify=False)
-        except requests.exceptions.RequestException as e: return None,str(e)
-        if r.status_code!=200: return None,f"HTTP {r.status_code}: {r.text[:200]}"
-        block=r.json().get("AcsEvent",{}); events=block.get("InfoList",[])
+        try:
+            r=requests.post(
+                url, auth=auth, json=payload, headers=headers,
+                timeout=25, verify=False,
+            )
+        except requests.exceptions.RequestException as e:
+            return None,str(e)
+        if r.status_code!=200:
+            return None,f"HTTP {r.status_code}: {r.text[:200]}"
+        try:
+            block=r.json().get("AcsEvent",{})
+        except ValueError:
+            return None, f"Device returned non-JSON content: {r.text[:200]}"
+        events=block.get("InfoList",[])
         total=block.get("totalMatches",0); num=block.get("numOfMatches",0)
         if not events: break
         all_events.extend(events); position+=num
