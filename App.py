@@ -542,7 +542,7 @@ SITES = {
     "India": {
         "label": "India",
         # IP:port is accepted; fetch_events() also supports complete HTTP/HTTPS URLs.
-        "device_ip": "102.221.20.46:4440",
+        "device_ip": "102.205.251.187:4440",
         "username": "admin",
         "password": "Bahdela01",
         "dept_order": ["Shop"],
