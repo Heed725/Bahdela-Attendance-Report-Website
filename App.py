@@ -1,6 +1,6 @@
 """
 Multi-Site Daily Shift Report — Streamlit App
-Supports: Buguruni, Puma Upanga, Puma Ocean Road, Puma Survey, India, Livingstone
+Supports: Buguruni, Puma Upanga, Puma Ocean Road, Puma Survey, India, Kibaha, Livingstone
 Run with:  python app.py   OR   streamlit run app.py
 """
 
@@ -12,6 +12,7 @@ import urllib3
 import io, sys, subprocess, os, re
 from datetime import date, timedelta, datetime, timezone
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from docx import Document
 from docx.shared import Pt, RGBColor, Cm
@@ -717,6 +718,72 @@ SITES = {
     },
 }
 
+# Mohamed Omar Bahdela is based at Buguruni as Manager. He may scan at any
+# device while travelling. Kibaha remains an unassigned location, but its scans
+# are still used so a journey such as Buguruni -> Kibaha is reported correctly.
+MOBILE_MANAGER_NAME = "Mohamed Omar Bahdela"
+MOBILE_MANAGER_HOME_SITE = "Buguruni"
+MOBILE_MANAGER_HOME_DEPT = "Oil Manager"
+MOBILE_MANAGER_KIBAHA_SITE = "Kibaha"
+MOBILE_MANAGER_KIBAHA_DEPT = "Manager"
+MOBILE_MANAGER_VISITOR_DEPT = "Visiting"
+
+
+def same_employee_name(left, right):
+    """Match the configured mobile manager without depending on letter case."""
+    normalized_left = " ".join(str(left or "").split()).casefold()
+    normalized_right = " ".join(str(right or "").split()).casefold()
+    return normalized_left == normalized_right
+
+
+def configure_mobile_manager():
+    """Assign Mohamed once at Buguruni and make him a visitor elsewhere."""
+    for site_name, site in SITES.items():
+        employees = site.setdefault("employees", {})
+
+        # Remove older roster placements, including the former Buguruni Shop row.
+        for department in employees.values():
+            department["members"] = [
+                member for member in department.get("members", [])
+                if not same_employee_name(member, MOBILE_MANAGER_NAME)
+            ]
+
+        if site_name == MOBILE_MANAGER_HOME_SITE:
+            employees[MOBILE_MANAGER_HOME_DEPT] = {
+                "label": "OIL MANAGER",
+                "shift": "Shift: 08:00 - 17:00",
+                "header_hex": "5A0000",
+                "members": [MOBILE_MANAGER_NAME],
+            }
+            # Keep it out of the static roster order. The section is inserted
+            # only after an actual Buguruni scan is found for the selected date.
+            site["dept_colors"][MOBILE_MANAGER_HOME_DEPT] = "#5A0000"
+        elif site_name == MOBILE_MANAGER_KIBAHA_SITE:
+            # Kibaha is a secondary management location. Keep the department
+            # dynamic so he appears only when a Kibaha scan is part of the trip.
+            employees[MOBILE_MANAGER_KIBAHA_DEPT] = {
+                "label": "MANAGER",
+                "shift": "Shift: 08:00 - 17:00",
+                "header_hex": "455A64",
+                "members": [MOBILE_MANAGER_NAME],
+                "visitor_only": True,
+            }
+            site["dept_colors"][MOBILE_MANAGER_KIBAHA_DEPT] = "#455A64"
+        else:
+            # Visiting is kept out of the normal roster order. It is shown only
+            # when this employee actually scanned at the selected location.
+            employees[MOBILE_MANAGER_VISITOR_DEPT] = {
+                "label": "VISITING MANAGER",
+                "shift": "Shift: 08:00 - 17:00",
+                "header_hex": "455A64",
+                "members": [MOBILE_MANAGER_NAME],
+                "visitor_only": True,
+            }
+            site["dept_colors"][MOBILE_MANAGER_VISITOR_DEPT] = "#455A64"
+
+
+configure_mobile_manager()
+
 # ── HARD CONFIG CLEANUP ──────────────────────────────────────
 def sanitize_puma_upanga_config():
     """Keep Upanga Manager-free and ensure Maryam appears once in Supermarket."""
@@ -962,6 +1029,7 @@ def parse_by_day(events, report_start=None, report_end=None):
     """
     employee_scans = defaultdict(list)
     employee_names = {}
+    employee_ids = {}
 
     for event in events:
         employee_id = str(
@@ -980,19 +1048,30 @@ def parse_by_day(events, report_start=None, report_end=None):
         if scan_time is None:
             continue
 
-        employee_names[employee_id] = name or f"ID {employee_id}"
-        employee_scans[employee_id].append(scan_time)
+        employee_name = name or f"ID {employee_id}"
+        group_key = employee_id
+        if same_employee_name(employee_name, MOBILE_MANAGER_NAME):
+            # The same person can have a different device-side number at another
+            # branch. Group by the canonical name so his trip stays one journey.
+            group_key = f"mobile-manager:{MOBILE_MANAGER_NAME.casefold()}"
+            employee_name = MOBILE_MANAGER_NAME
+
+        scan_site = str(event.get("_site_name") or "").strip()
+        employee_names[group_key] = employee_name
+        employee_ids.setdefault(group_key, employee_id)
+        employee_scans[group_key].append((scan_time, scan_site))
 
     rows = []
 
-    for employee_id, scans in employee_scans.items():
-        scans = sorted(set(scans))
-        employee_name = employee_names[employee_id]
+    for group_key, scans in employee_scans.items():
+        scans = sorted(set(scans), key=lambda item: (item[0], item[1]))
+        employee_name = employee_names[group_key]
+        employee_id = employee_ids[group_key]
         department_key = get_dept(employee_name)
         index = 0
 
         while index < len(scans):
-            check_in_dt = scans[index]
+            check_in_dt, check_in_site = scans[index]
             _, allocated_end = get_shift_window(department_key, check_in_dt)
             checkout_start, checkout_deadline = get_checkout_window(
                 department_key,
@@ -1000,12 +1079,16 @@ def parse_by_day(events, report_start=None, report_end=None):
             )
 
             checkout_dt = None
+            checkout_site = ""
             checkout_index = None
             next_index = index + 1
             candidate_index = index + 1
+            visited_sites = [check_in_site] if check_in_site else []
 
             while candidate_index < len(scans):
-                candidate = scans[candidate_index]
+                candidate, candidate_site = scans[candidate_index]
+                if candidate_site and candidate_site not in visited_sites:
+                    visited_sites.append(candidate_site)
 
                 # Ignore duplicate/extra scans made before checkout is allowed.
                 if candidate < checkout_start:
@@ -1016,6 +1099,7 @@ def parse_by_day(events, report_start=None, report_end=None):
                 # Accept the first scan inside the configured checkout window.
                 if candidate <= checkout_deadline:
                     checkout_dt = candidate
+                    checkout_site = candidate_site
                     checkout_index = candidate_index
                 break
 
@@ -1034,6 +1118,28 @@ def parse_by_day(events, report_start=None, report_end=None):
                     "check_out": check_out,
                     "hours": calc_hours(check_in, check_out),
                     "mins": calc_mins(check_in, check_out),
+                    "role": (
+                        "Oil Manager"
+                        if same_employee_name(employee_name, MOBILE_MANAGER_NAME)
+                        and department_key == MOBILE_MANAGER_HOME_DEPT
+                        else "Manager"
+                        if same_employee_name(employee_name, MOBILE_MANAGER_NAME)
+                        else ALL_EMPLOYEES.get(department_key, {}).get("label", department_key or "")
+                    ),
+                    "visit_status": (
+                        "Home - Buguruni"
+                        if same_employee_name(employee_name, MOBILE_MANAGER_NAME)
+                        and department_key == MOBILE_MANAGER_HOME_DEPT
+                        else "Kibaha Management"
+                        if same_employee_name(employee_name, MOBILE_MANAGER_NAME)
+                        and department_key == MOBILE_MANAGER_KIBAHA_DEPT
+                        else "Visiting"
+                        if same_employee_name(employee_name, MOBILE_MANAGER_NAME)
+                        else "Assigned"
+                    ),
+                    "start_location": check_in_site or "-",
+                    "end_location": (checkout_site or check_in_site or "-") if checkout_dt else "-",
+                    "visited_sites": visited_sites,
                 })
 
             index = (
@@ -1054,8 +1160,29 @@ def parse_by_day(events, report_start=None, report_end=None):
             existing["check_out"] = row["check_out"]
             existing["hours"] = calc_hours(existing["check_in"], existing["check_out"])
             existing["mins"] = calc_mins(existing["check_in"], existing["check_out"])
+            existing["end_location"] = row.get("end_location", "-")
+            existing["visited_sites"] = list(dict.fromkeys(
+                existing.get("visited_sites", []) + row.get("visited_sites", [])
+            ))
 
     return sorted(consolidated.values(), key=lambda row: (row["date"], row["name"]))
+
+
+def movement_text(record):
+    """Human-readable start/end wording for the viewer and exported reports."""
+    start_site = record.get("start_location") or "-"
+    end_site = record.get("end_location") or "-"
+    if end_site == "-":
+        return f"Start: {start_site} | End: pending"
+    return f"Start: {start_site} | End: {end_site}"
+
+
+def display_employee_name(record):
+    """Include the mobile manager's role and movement in downloaded daily files."""
+    if same_employee_name(record.get("name"), MOBILE_MANAGER_NAME):
+        visit_status = record.get("visit_status", "Visiting")
+        return f"{MOBILE_MANAGER_NAME} ({record.get('role', 'Manager')}; {visit_status}) - {movement_text(record)}"
+    return record.get("name", "")
 
 def build_dept_data(day_rows):
     result={}
@@ -1189,6 +1316,57 @@ def fetch_events(device_ip,username,password,start_date,end_date,progress_cb=Non
     attendance=[e for e in all_events if e.get("employeeNoString") or e.get("name")]
     return attendance,None
 
+
+def is_mobile_manager_event(event):
+    return same_employee_name(event.get("name"), MOBILE_MANAGER_NAME)
+
+
+def tag_events_with_site(events, site_name):
+    """Copy device events and attach the physical site that recorded each scan."""
+    tagged = []
+    for event in events or []:
+        item = dict(event)
+        item["_site_name"] = site_name
+        tagged.append(item)
+    return tagged
+
+
+def fetch_mobile_manager_events(selected_site, selected_events, start_date, end_date):
+    """Collect Mohamed's scans across devices without failing the main report."""
+    manager_events = [
+        event for event in tag_events_with_site(selected_events, selected_site)
+        if is_mobile_manager_event(event)
+    ]
+    failures = {}
+
+    other_sites = [
+        (site_name, config)
+        for site_name, config in SITES.items()
+        if site_name != selected_site
+    ]
+
+    def fetch_one(site_name, config):
+        events, error = fetch_events(
+            config["device_ip"], config["username"], config["password"],
+            start_date, end_date,
+        )
+        return site_name, events, error
+
+    # Device calls are independent; a small pool keeps report generation quick.
+    with ThreadPoolExecutor(max_workers=min(4, len(other_sites) or 1)) as executor:
+        futures = [executor.submit(fetch_one, name, cfg) for name, cfg in other_sites]
+        for future in as_completed(futures):
+            site_name, events, error = future.result()
+            if error:
+                failures[site_name] = error
+                continue
+            manager_events.extend(
+                event for event in tag_events_with_site(events, site_name)
+                if is_mobile_manager_event(event)
+            )
+
+    return manager_events, failures
+
 # ══════════════════════════════════════════════════════════════
 # ── DOCX BUILDER ─────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════
@@ -1302,7 +1480,7 @@ def build_docx_daily(rows_by_date,start_date,end_date,site="Buguruni"):
                 fill="FFFFFF"
                 ci_bg,ci_tc=checkin_fill(dk,rec["check_in"])
                 _wc(rw.cells[0],idx+1,align=WD_ALIGN_PARAGRAPH.CENTER,bg=fill)
-                _wc(rw.cells[1],rec["name"],bg=fill)
+                _wc(rw.cells[1],display_employee_name(rec),bg=fill)
                 _wc(rw.cells[2],rec["employee_id"],align=WD_ALIGN_PARAGRAPH.CENTER,bg=fill)
                 _wc(rw.cells[3],rec["check_in"],bold=True,color=ci_tc,align=WD_ALIGN_PARAGRAPH.CENTER,bg=ci_bg)
                 _wc(rw.cells[4],rec["check_out"] if rec["check_out"]!="-" else "",align=WD_ALIGN_PARAGRAPH.CENTER,bg=fill)
@@ -1446,7 +1624,7 @@ def build_pdf_daily(rows_by_date,start_date,end_date,site="Buguruni"):
                 fill=CCR
                 ci_bg_h,ci_tc_h=checkin_fill(dk,rec["check_in"])
                 ci_bg=hex2rl(ci_bg_h); ci_tc=hex2rl(ci_tc_h)
-                data.append([RP(str(idx+1),size=8,align=TA_CENTER),RP(rec["name"],size=8),
+                data.append([RP(str(idx+1),size=8,align=TA_CENTER),RP(display_employee_name(rec),size=8),
                               RP(rec["employee_id"],size=8,align=TA_CENTER),
                               RP(rec["check_in"],bold=True,size=8,color=ci_tc,align=TA_CENTER),
                               RP(rec["check_out"] if rec["check_out"]!="-" else "",size=8,align=TA_CENTER),
@@ -1605,7 +1783,7 @@ def build_xlsx_daily(rows_by_date,start_date,end_date,site="Buguruni"):
                 co=rec["check_out"] if rec["check_out"]!="-" else ""
                 hrs=rec["hours"] if rec["hours"]!="-" else ""
                 for i,(val,al,fhx,fc) in enumerate(zip(
-                        [idx+1,rec["name"],rec["employee_id"],rec["check_in"],co,hrs],
+                        [idx+1,display_employee_name(rec),rec["employee_id"],rec["check_in"],co,hrs],
                         AL,[fh,fh,fh,ci_bg,fh,fh],["2D2D2D","2D2D2D","2D2D2D",ci_tc,"2D2D2D","2D2D2D"])):
                     cell=ws.cell(cur,i+1,val)
                     cell.font=Font(name="Arial",size=10,color=fc,bold=(i==3))
@@ -1771,8 +1949,49 @@ if st.button("View / Generate Reports"):
     events,err=fetch_events(device_ip,username,password,start_date,end_date,upd)
     if err: st.error(f"Failed to fetch data: {err}"); st.stop()
 
+    progress.progress(0.56); status.info("Checking management movement across locations...")
+    manager_events, location_failures = fetch_mobile_manager_events(
+        st.session_state.selected_site, events, start_date, end_date,
+    )
+
+    # Normal staff remain tied to the active device. Only Mohamed's scans are
+    # replaced with the cross-site set so his first and last locations connect.
+    tagged_selected_events = tag_events_with_site(events, st.session_state.selected_site)
+    report_events = [
+        event for event in tagged_selected_events
+        if not is_mobile_manager_event(event)
+    ] + manager_events
+
     progress.progress(0.6); status.info("Processing records...")
-    rows=parse_by_day(events,start_date,end_date)
+    rows=parse_by_day(report_events,start_date,end_date)
+
+    # Show the mobile manager on a branch report only when that branch recorded
+    # one of his scans. Buguruni remains his permanent Manager roster.
+    rows = [
+        row for row in rows
+        if not same_employee_name(row.get("name"), MOBILE_MANAGER_NAME)
+        or st.session_state.selected_site in row.get("visited_sites", [])
+    ]
+    mobile_present_here = any(
+        same_employee_name(row.get("name"), MOBILE_MANAGER_NAME)
+        for row in rows
+    )
+    if mobile_present_here:
+        if st.session_state.selected_site == MOBILE_MANAGER_HOME_SITE:
+            mobile_department = MOBILE_MANAGER_HOME_DEPT
+        elif st.session_state.selected_site == MOBILE_MANAGER_KIBAHA_SITE:
+            mobile_department = MOBILE_MANAGER_KIBAHA_DEPT
+        else:
+            mobile_department = MOBILE_MANAGER_VISITOR_DEPT
+        if mobile_department not in DEPT_ORDER:
+            DEPT_ORDER.append(mobile_department)
+
+    if location_failures:
+        st.warning(
+            "Management movement could not be checked at: "
+            + ", ".join(sorted(location_failures))
+            + ". The selected site's main report is still available."
+        )
     rows_by_date=defaultdict(list)
     for r in rows: rows_by_date[r["date"]].append(r)
 
@@ -1882,8 +2101,12 @@ if st.button("View / Generate Reports"):
                             "Status": "Present",
                             "Employee Name": rec["name"],
                             "ID": rec["employee_id"],
+                            "Role": rec.get("role", department["label"]),
+                            "Visit Status": rec.get("visit_status", "Assigned"),
                             "Check In": rec["check_in"],
                             "Check Out": "" if rec["check_out"] == "-" else rec["check_out"],
+                            "Start Location": rec.get("start_location", site_display),
+                            "End Location": "" if rec.get("end_location") == "-" else rec.get("end_location", site_display),
                             "Hours Worked": "" if rec["hours"] == "-" else rec["hours"],
                         })
                     for absent_name in attendance["absent"]:
@@ -1891,15 +2114,20 @@ if st.button("View / Generate Reports"):
                             "Status": "Absent",
                             "Employee Name": absent_name,
                             "ID": get_configured_employee_id(dk, absent_name),
+                            "Role": department["label"],
+                            "Visit Status": "Assigned",
                             "Check In": "",
                             "Check Out": "",
+                            "Start Location": "",
+                            "End Location": "",
                             "Hours Worked": "",
                         })
 
                     if viewer_rows:
                         viewer_columns = [
-                            "Status", "Employee Name", "ID",
-                            "Check In", "Check Out", "Hours Worked",
+                            "Status", "Employee Name", "ID", "Role", "Visit Status",
+                            "Check In", "Check Out", "Start Location",
+                            "End Location", "Hours Worked",
                         ]
                         viewer_df = pd.DataFrame(viewer_rows, columns=viewer_columns)
                         styled_viewer = style_viewer_dataframe(viewer_df, dk)
