@@ -1,10 +1,11 @@
 """
 Multi-Site Daily Shift Report — Streamlit App
 Supports: Buguruni, Puma Upanga, Puma Ocean Road, Puma Survey, India, Kibaha, Livingstone
-Run with:  python app.py   OR   streamlit run app.py
+Run with:  python App.py   OR   streamlit run App.py
 """
 
 import streamlit as st
+from employee_management import roster_store, render_login, render_management
 import requests
 import pandas as pd
 from requests.auth import HTTPDigestAuth
@@ -812,6 +813,15 @@ def sanitize_puma_upanga_config():
 
 sanitize_puma_upanga_config()
 
+# Apply saved employee placements after the original roster initialization.
+try:
+    management_store = roster_store()
+    management_store.apply(SITES)
+except Exception:
+    management_store = None
+    st.error("Saved employee placements could not be loaded. Check the roster data directory.")
+    st.stop()
+
 # ── Runtime site selection (resolved after sidebar renders) ───
 # These are set dynamically in the UI section below; defaults here
 ALL_EMPLOYEES = SITES["Buguruni"]["employees"]
@@ -837,6 +847,16 @@ def get_configured_employee_id(dept_key, name):
         if str(member_name).strip().casefold() == wanted:
             return str(employee_id)
     return "-"
+
+def get_configured_employee_job(dept_key, name):
+    """Use an assigned job title, retaining existing report roles by default."""
+    department = ALL_EMPLOYEES.get(dept_key, {})
+    wanted = ' '.join(str(name).split()).casefold()
+    for member, job in department.get('member_jobs', {}).items():
+        if ' '.join(str(member).split()).casefold() == wanted:
+            return job
+    return department.get('label', dept_key or '')
+
 
 def to_min(t):
     if not t or t=="-": return None
@@ -1124,7 +1144,7 @@ def parse_by_day(events, report_start=None, report_end=None):
                         and department_key == MOBILE_MANAGER_HOME_DEPT
                         else "Manager"
                         if same_employee_name(employee_name, MOBILE_MANAGER_NAME)
-                        else ALL_EMPLOYEES.get(department_key, {}).get("label", department_key or "")
+                        else get_configured_employee_job(department_key, employee_name)
                     ),
                     "visit_status": (
                         "Home - Buguruni"
@@ -1864,13 +1884,21 @@ username = site_cfg["username"]
 password = site_cfg["password"]
 
 # Header — original simple structure with no Settings button.
-st.markdown(f"# {site_cfg['label']} Shift Reports")
+header_title, header_login = st.columns([8, 1.4], vertical_alignment="center")
+with header_title:
+    st.markdown(f"# {site_cfg['label']} Shift Reports")
+with header_login:
+    render_login()
 
 st.markdown(
     f"<p style='color:{MUTED};margin-top:-10px'>Daily attendance reports — "
     f"<b>{site_cfg['label']}</b> access control device.</p>",
     unsafe_allow_html=True,
 )
+
+if st.session_state.get("management_message"):
+    st.success(st.session_state.pop("management_message"))
+render_management(SITES, management_store)
 
 # One row of site choices. Clicking the site name changes the active site;
 # there are no separate Switch buttons.
@@ -2114,7 +2142,7 @@ if st.button("View / Generate Reports"):
                             "Status": "Absent",
                             "Employee Name": absent_name,
                             "ID": get_configured_employee_id(dk, absent_name),
-                            "Role": department["label"],
+                            "Role": get_configured_employee_job(dk, absent_name),
                             "Visit Status": "Assigned",
                             "Check In": "",
                             "Check Out": "",
