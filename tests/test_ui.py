@@ -37,6 +37,8 @@ class InterfaceTests(unittest.TestCase):
             terminal = FakeTerminal('http://fake.test')
             terminal.users = {str(index): {'employeeNo': str(index), 'name': name}
                               for index, name in enumerate(['Athumani Y Shebly', 'Hamlat S ghindu', 'Mnyeto M Rashid'], 901)}
+            terminal.users.pop('903')
+            terminal.users['1365'] = {'employeeNo': '1365', 'name': 'Mnyeto Miraji Rashidi'}
             with patch('employee_management.client_for', return_value=terminal):
                 at = AppTest.from_file(str(Path(__file__).parents[1] / 'App.py'), default_timeout=30).run()
                 at.session_state['management_account'] = 'HR'
@@ -47,6 +49,8 @@ class InterfaceTests(unittest.TestCase):
                 at.button(key='manage_delete_Puma Upanga_refresh').click().run()
                 for employee_id, user in terminal.users.items():
                     self.assertIn(user['name'], at.checkbox(key='manage_delete_Puma Upanga_tick_'+employee_id).label)
+                self.assertEqual(at.checkbox(key='manage_delete_Puma Upanga_tick_1365').label,
+                                 'Mnyeto Miraji Rashidi · ID 1365 · Security · SECURITY')
                 at.selectbox(key='manage_transfer_source').select('Puma Upanga').run()
                 at.button(key='manage_transfer_Puma Upanga_refresh').click().run()
                 options = at.selectbox(key='manage_transfer_Puma Upanga_choice').options

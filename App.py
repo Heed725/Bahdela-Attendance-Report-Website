@@ -365,7 +365,7 @@ SITES = {
                     "Bakari Saidi Mchingwi","Bihasanati Saidi Nzige","Daudi Rashidi Sharabile",
                     "Elibariki Geofrey Mshana","Hamadi Adinani Iddi","Hamlati Shaibu Ghindu",
                     "Jamali Sadi Kilindo","Juma Mussa Juma",
-                    "Kelvin Lukemelo Mlowe","Mnyeto Miraji Rashidi",
+                    "Kelvin Lukemelo Mlowe",
                     "Ramadhani Abdallah Ally","Hassani Muhidini Masenga",
                     "Rashidi Majau Masai","Ramadhan Mohamed Yusuph",
                     "Rajabu Ijumaa Hizza","Nesha Habib Losiri","Msabaha Ally Msabaha",
@@ -373,7 +373,6 @@ SITES = {
                 "member_aliases": {
                     "Athumani Yusuph Sheby": ["Athumani Y Shebly"],
                     "Hamlati Shaibu Ghindu": ["Hamlat S ghindu"],
-                    "Mnyeto Miraji Rashidi": ["Mnyeto M Rashid"],
                 },
             },
             "Oil Lubricant": {
@@ -419,6 +418,8 @@ SITES = {
                 "members":[
                     "Karim Mohamedi Radaki","Mnyeto Miraji Rashidi","Abdul Miraj Mkwizu",
                 ],
+                "member_ids": {"Mnyeto Miraji Rashidi": "1365"},
+                "member_aliases": {"Mnyeto Miraji Rashidi": ["Mnyeto M Rashid"]},
             },
             "Cleaner": {
                 "label":"CLEANER (HOUSE KEEPING)", "shift":"Shifts: 08:00-17:00 | 17:00-08:00",

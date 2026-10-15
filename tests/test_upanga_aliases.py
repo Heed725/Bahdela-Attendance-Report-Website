@@ -27,24 +27,39 @@ class UpangaNameTests(unittest.TestCase):
         self.users = [
             {'employeeNo': 'test901', 'name': 'Athumani Y Shebly'},
             {'employeeNo': 'test902', 'name': 'Hamlat S ghindu'},
-            {'employeeNo': 'test903', 'name': 'Mnyeto M Rashid'},
+            {'employeeNo': '1365', 'name': 'Mnyeto M Rashid'},
         ]
         self.canonical = ['Athumani Yusuph Sheby', 'Hamlati Shaibu Ghindu', 'Mnyeto Miraji Rashidi']
 
-    def test_all_three_now_load_in_upanga_oil(self):
+    def test_all_three_load_in_their_correct_upanga_departments(self):
         before = copy.deepcopy(self.sites)
         before['Puma Upanga']['employees']['Oil'].pop('member_aliases')
+        before['Puma Upanga']['employees']['Security'].pop('member_aliases')
         self.assertEqual(filter_report_users(self.users, 'Puma Upanga', before), [])
         matches = filter_report_users(self.users, 'Puma Upanga', self.sites)
         self.assertEqual({row['name'] for row in matches}, {row['name'] for row in self.users})
         self.assertEqual({row['roster_name'] for row in matches}, set(self.canonical))
-        self.assertEqual({row['department'] for row in matches}, {'Oil'})
+        self.assertEqual({row['name']: row['department'] for row in matches}, {
+            'Athumani Y Shebly': 'Oil', 'Hamlat S ghindu': 'Oil', 'Mnyeto M Rashid': 'Security'})
+
+    def test_screenshot_full_name_and_id_load_once_in_security(self):
+        user = {'employeeNo': '1365', 'name': 'Mnyeto Miraji Rashidi'}
+        matches = filter_report_users([user], 'Puma Upanga', self.sites)
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]['department'], 'Security')
+        assignments = [key for key, dept in self.site['employees'].items() if user['name'] in dept['members']]
+        self.assertEqual(assignments, ['Security'])
+        current = current_report_roster(self.site, [user])
+        self.assertEqual(current['employees']['Security']['member_ids'][user['name']], '1365')
+        self.assertNotIn(user['name'], current['employees']['Oil']['members'])
+        self.assertEqual(filter_report_users([{**user, 'employeeNo': 'wrong-id'}], 'Puma Upanga', self.sites), [])
 
     def test_matching_is_case_insensitive_and_scoped_to_upanga(self):
         users = [{**user, 'name': '  '+user['name'].upper().replace(' ', '  ')+'  '} for user in self.users]
         self.assertEqual(len(filter_report_users(users, 'Puma Upanga', self.sites)), 3)
         other = copy.deepcopy(self.site)
         other['employees']['Oil'].pop('member_aliases')
+        other['employees']['Security'].pop('member_aliases')
         self.assertEqual(filter_report_users(self.users, 'Other', {'Other': other}), [])
 
     def test_alias_needs_unique_user_and_cannot_override_a_known_id(self):
@@ -57,7 +72,8 @@ class UpangaNameTests(unittest.TestCase):
 
     def test_report_includes_all_three_aliases_by_current_id(self):
         current = current_report_roster(self.site, self.users)
-        self.assertEqual(current['employees']['Oil']['members'], self.canonical)
+        self.assertEqual(current['employees']['Oil']['members'], self.canonical[:2])
+        self.assertEqual(current['employees']['Security']['members'], self.canonical[2:])
         events = [{'employeeNoString': user['employeeNo'], 'name': user['name']} for user in self.users]
         events.append({'employeeNoString': 'test999', 'name': self.users[0]['name']})
         filtered = current_report_events(events, current)
@@ -75,6 +91,7 @@ class UpangaNameTests(unittest.TestCase):
             fresh = {'Puma Upanga': upanga_site()}
             store.apply(fresh)
             self.assertTrue(set(self.canonical).isdisjoint(fresh['Puma Upanga']['employees']['Oil']['members']))
+            self.assertNotIn(self.canonical[2], fresh['Puma Upanga']['employees']['Security']['members'])
             self.assertEqual(filter_report_users(self.users, 'Puma Upanga', fresh), [])
             self.assertEqual(current_report_roster(fresh['Puma Upanga'], self.users)['employees']['Oil']['members'], [])
 
