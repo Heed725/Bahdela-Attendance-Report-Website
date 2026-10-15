@@ -32,6 +32,56 @@ class FakeTerminal:
 
 
 class InterfaceTests(unittest.TestCase):
+    def test_lunch_button_is_on_right_and_only_visible_for_buguruni(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'_APP_LAUNCHED': '1', 'ROSTER_DB_PATH': folder+'/roster.db'}):
+            at = AppTest.from_file(str(Path(__file__).parents[1] / 'App.py'), default_timeout=30).run()
+            self.assertFalse(at.exception)
+            lunch = at.button(key='buguruni_lunch_report')
+            self.assertEqual(lunch.label, 'View report with lunch time')
+            report_columns = [column for column in at.get('column') if any(
+                button.label in ['View / Generate Reports', 'View report with lunch time'] for button in column.button)]
+            self.assertEqual([column.button[0].label for column in report_columns],
+                             ['View / Generate Reports', 'View report with lunch time'])
+            for site_name in ['Puma Upanga', 'Puma Ocean Road', 'Puma Survey', 'India', 'Kibaha', 'Livingstone']:
+                at.radio(key='site_selector_row').set_value(site_name).run()
+                self.assertFalse(at.exception)
+                self.assertFalse(any(button.key == 'buguruni_lunch_report' for button in at.button))
+                self.assertIn('View / Generate Reports', [button.label for button in at.button])
+
+    def test_lunch_button_generates_four_clockings_and_six_downloads(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'_APP_LAUNCHED': '1', 'ROSTER_DB_PATH': folder+'/roster.db'}):
+            terminal = FakeTerminal('http://fake.test')
+            terminal.users = {'102': {'employeeNo': '102', 'name': 'Abdallah Iddi Omary'},
+                              '103': {'employeeNo': '103', 'name': 'Abubakary Hussein Sharif'}}
+            day = datetime.now(timezone(timedelta(hours=3))).date().isoformat()
+            events = [{'employeeNoString': '102', 'name': 'Abdallah Iddi Omary',
+                       'time': day+'T'+time+':00+03:00'} for time in ['08:00', '13:00', '14:00', '16:00']]
+            # A deleted employee's scans must still be excluded in the new mode.
+            events.append({'employeeNoString': '999', 'name': 'Deleted Person', 'time': day+'T08:00:00+03:00'})
+            response = type('Response', (), {'status_code': 200, 'json': lambda self: {
+                'AcsEvent': {'InfoList': events, 'totalMatches': len(events), 'numOfMatches': len(events)}}})()
+            with patch('employee_management.client_for', return_value=terminal), \
+                 patch('requests.post', return_value=response) as fetch, \
+                 patch('streamlit.download_button', return_value=False) as downloads:
+                at = AppTest.from_file(str(Path(__file__).parents[1] / 'App.py'), default_timeout=30).run()
+                at.button(key='buguruni_lunch_report').click().run()
+                self.assertFalse(at.exception)
+                self.assertFalse(at.error)
+                self.assertEqual(fetch.call_count, 1)
+                metrics = {metric.label: metric.value for metric in at.metric}
+                self.assertEqual(metrics['Complete Days'], '1')
+                self.assertEqual(metrics['Staff Roster'], '2')
+                data = at.dataframe[0].value
+                present = data[data['ID'] == '102'].iloc[0]
+                self.assertEqual([present[key] for key in ['Check In', 'Lunch Out', 'Lunch In', 'Check Out']],
+                                 ['08:00', '13:00', '14:00', '16:00'])
+                self.assertEqual(present['Net Hours'], '7h 00m')
+                self.assertEqual(data[data['ID'] == '103'].iloc[0]['Status'], 'Absent')
+                self.assertNotIn('Deleted Person', data.to_string())
+                self.assertEqual(downloads.call_count, 6)
+                for call in downloads.call_args_list:
+                    self.assertIn('_With_Lunch_', call.kwargs['file_name'])
+
     def test_three_upanga_aliases_load_in_delete_and_transfer_lists(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'_APP_LAUNCHED': '1', 'ROSTER_DB_PATH': folder+'/roster.db'}):
             terminal = FakeTerminal('http://fake.test')

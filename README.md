@@ -2,6 +2,16 @@
 
 The existing seven-site attendance report website, with an optional **Login** button at the top right. Reports, colours, departments, exports and the existing mobile-manager reporting remain available as before.
 
+## Buguruni lunch report
+
+Buguruni has two report buttons on the same row. **View / Generate Reports** opens the existing shift report. **View report with lunch time**, on its right, opens a separate day report with four actual scans: **08:00 arrival → 13:00 lunch out → 14:00 lunch back → 16:00 departure**. The extra button is hidden at all other sites.
+
+The lunch report uses Buguruni's current verified employee roster and the selected date range, and reads only the Buguruni terminal's scans. It uses a calendar-day 08:00-16:00 schedule for this mode, rather than each department's normal/overnight shift. The normal report keeps its existing shift and cross-site manager movement rules.
+
+For each employee and day, the first scan before 13:00 is arrival, the first from 13:00 up to 14:00 is lunch out, the first from 14:00 up to 16:00 is lunch back, and the first from 16:00 onward is departure. Extra scans in a time period do not fill a different period. Missing clockings stay blank and are listed in **Missing Clockings**; current staff with no scans appear as absent. No scheduled time is inserted as a clocking. Net hours require all four scans and equal morning work plus afternoon work. Thus 08:00/13:00/14:00/16:00 gives **7h 00m**, excluding the one-hour lunch break.
+
+The screen report and Word, PDF and Excel downloads include daily lunch details and a period summary. The summary shows complete/incomplete days and totals net hours only for complete days. Lunch downloads include `_With_Lunch_` in their filenames so they are easy to distinguish from normal reports.
+
 ## Employee management
 
 The requested **Kanza**, **HR** and **admin** accounts all have permission to add, delete, transfer and enroll employees. Passwords are verified on the server against PBKDF2 hashes. Login expires after 30 minutes of inactivity. Log out on shared computers. The management panel is hidden until login.

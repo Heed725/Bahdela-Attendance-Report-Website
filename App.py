@@ -8,6 +8,7 @@ import streamlit as st
 from employee_management import roster_store, render_login, render_management, report_site_for
 from hikvision import HikvisionError
 from report_roster import current_report_events
+from lunch_reports import render_lunch_report
 import requests
 import pandas as pd
 from requests.auth import HTTPDigestAuth
@@ -1976,7 +1977,17 @@ st.markdown(f"<small style='color:{MUTED}'>{num_days} day(s) selected — <b>{pe
 st.markdown("---")
 
 # ── Generate ──────────────────────────────────────────────────
-if st.button("View / Generate Reports"):
+with_lunch = False
+if st.session_state.selected_site == "Buguruni":
+    regular_button, lunch_button = st.columns(2)
+    with regular_button:
+        generate_report = st.button("View / Generate Reports")
+    with lunch_button:
+        with_lunch = st.button("View report with lunch time", key="buguruni_lunch_report")
+else:
+    generate_report = st.button("View / Generate Reports")
+
+if generate_report or with_lunch:
     progress=st.progress(0.0); status=st.empty()
 
     def upd(val,msg): progress.progress(val); status.info(msg)
@@ -1996,21 +2007,26 @@ if st.button("View / Generate Reports"):
     events,err=fetch_events(device_ip,username,password,start_date,end_date,upd)
     if err: st.error(f"Failed to fetch data: {err}"); st.stop()
 
-    progress.progress(0.56); status.info("Checking management movement across locations...")
-    manager_events, location_failures = fetch_mobile_manager_events(
-        st.session_state.selected_site, events, start_date, end_date,
-    )
-
-    # Normal staff remain tied to the active device. Only Mohamed's scans are
-    # replaced with the cross-site set so his first and last locations connect.
-    tagged_selected_events = tag_events_with_site(events, st.session_state.selected_site)
-    report_events = [
-        event for event in tagged_selected_events
-        if not is_mobile_manager_event(event)
-    ] + manager_events
+    if with_lunch:
+        report_events = tag_events_with_site(events, st.session_state.selected_site)
+        location_failures = {}
+    else:
+        progress.progress(0.56); status.info("Checking management movement across locations...")
+        manager_events, location_failures = fetch_mobile_manager_events(
+            st.session_state.selected_site, events, start_date, end_date,
+        )
+        # Preserve the existing cross-site journey in the normal report.
+        tagged_selected_events = tag_events_with_site(events, st.session_state.selected_site)
+        report_events = [event for event in tagged_selected_events
+                         if not is_mobile_manager_event(event)] + manager_events
 
     progress.progress(0.6); status.info("Processing records...")
     report_events = current_report_events(report_events, report_site, MOBILE_MANAGER_NAME)
+    if with_lunch:
+        render_lunch_report(report_events, report_site, start_date, end_date, tag, get_logo_path())
+        progress.progress(1.0)
+        status.success("Lunch reports ready!")
+        st.stop()
     rows=parse_by_day(report_events,start_date,end_date)
 
     # Show the mobile manager on a branch report only when that branch recorded
