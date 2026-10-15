@@ -201,6 +201,7 @@ class HikvisionClient:
         """Fetch all pages, or exactly one person, without inferring IDs from names."""
         search_id = str(uuid.uuid4())
         users = []
+        seen_ids = set()
         position = 0
         while True:
             condition = {"searchID": search_id, "searchResultPosition": position, "maxResults": 30}
@@ -218,10 +219,24 @@ class HikvisionClient:
                 batch = [batch]
             if not isinstance(batch, list):
                 raise HikvisionError("The terminal returned an invalid employee list.")
+            batch_ids = [str(user.get('employeeNo') or '').strip()
+                         for user in batch if isinstance(user, dict)]
+            if len(batch_ids) != len(batch) or not all(batch_ids):
+                raise HikvisionError("The terminal returned an invalid employee list.")
+            if len(set(batch_ids)) != len(batch_ids) or seen_ids.intersection(batch_ids):
+                raise HikvisionError("The terminal repeated an employee page. Please retry.")
+            seen_ids.update(batch_ids)
             users.extend(batch)
             position += len(batch)
-            total = int(search.get("totalMatches", position) or 0)
-            if not batch or position >= total:
+            try:
+                total = int(search['totalMatches'])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise HikvisionError("The terminal did not confirm the complete employee count.") from exc
+            if total < position:
+                raise HikvisionError("The terminal employee list changed during loading. Please retry.")
+            if not batch and position < total:
+                raise HikvisionError("The terminal returned an incomplete employee list. Please retry.")
+            if position >= total:
                 return users
             if position > 100000:
                 raise HikvisionError("The terminal returned too many employee records.")

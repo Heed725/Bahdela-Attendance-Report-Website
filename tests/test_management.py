@@ -153,6 +153,29 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(len(self.client.search_users()), 2)
         self.assertEqual(self.client._request.call_args.kwargs['json']['UserInfoSearchCond']['searchResultPosition'], 1)
 
+    def test_incomplete_search_is_not_a_complete_current_roster(self):
+        self.client._request = MagicMock(side_effect=[
+            ApiResult(True, 200, {'UserInfoSearch': {'totalMatches': 2, 'UserInfo': [EMPLOYEE]}}),
+            ApiResult(True, 200, {'UserInfoSearch': {'totalMatches': 2, 'UserInfo': []}})])
+        with self.assertRaisesRegex(HikvisionError, 'incomplete'):
+            self.client.search_users()
+
+    def test_missing_count_cannot_masquerade_as_an_empty_terminal(self):
+        self.client._request = MagicMock(return_value=ApiResult(True, 200, {'UserInfoSearch': {}}))
+        with self.assertRaisesRegex(HikvisionError, 'complete employee count'):
+            self.client.search_users()
+
+    def test_repeated_page_cannot_hide_other_employees(self):
+        self.client._request = MagicMock(return_value=ApiResult(True, 200, {
+            'UserInfoSearch': {'totalMatches': 2, 'UserInfo': [EMPLOYEE]}}))
+        with self.assertRaisesRegex(HikvisionError, 'repeated'):
+            self.client.search_users()
+
+    def test_verified_empty_terminal_is_valid(self):
+        self.client._request = MagicMock(return_value=ApiResult(True, 200, {
+            'UserInfoSearch': {'totalMatches': 0, 'UserInfo': []}}))
+        self.assertEqual(self.client.search_users(), [])
+
 
 if __name__ == '__main__':
     unittest.main()

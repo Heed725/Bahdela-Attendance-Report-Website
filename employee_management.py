@@ -10,7 +10,8 @@ import streamlit as st
 from admin_auth import active_account, login, logout, require_permission
 from hikvision import HikvisionClient, HikvisionError, response_message
 from registration_sites import load_sites
-from roster_store import RosterStore, normalized
+from roster_store import RosterStore, normalized, configured_names
+from report_roster import current_report_roster
 
 
 def secrets_dict():
@@ -36,6 +37,14 @@ def client_for(site_name, sites):
                            configured.timeout, configured.verify_tls)
 
 
+def report_site_for(site_name, sites, store):
+    # Re-read saved changes so another session's deletions are respected too.
+    current = copy.deepcopy(sites)
+    store.apply(current)
+    users = client_for(site_name, current).search_users()
+    return current_report_roster(current[site_name], users)
+
+
 def verify_identity(client, employee):
     live = client.get_user(employee['employeeNo'])
     if not live or normalized(live.get('name', '')) != normalized(employee.get('name', '')):
@@ -51,10 +60,11 @@ def add_employee(state, client, store, record, site, department, job=None):
 
 def delete_employee(state, client, store, employee, site, sites=None):
     actor = require_permission(state, 'delete')
-    require_report_member(employee, site, sites, store)
+    member = require_report_member(employee, site, sites, store)
     verify_identity(client, employee)
     client.delete_user(employee['employeeNo'])
-    store.save(actor, 'delete', employee['employeeNo'], employee['name'], source=site)
+    store.save(actor, 'delete', employee['employeeNo'], employee['name'], source=site,
+               old_name=member['roster_name'])
 
 
 def delete_employees(state, client, store, employees, site, sites):
@@ -100,14 +110,15 @@ def prepare_transfer(state, source_client, target_client, store, employee, sourc
 def finish_transfer(state, source_client, target_client, store, pending, sites=None):
     actor = require_permission(state, 'transfer')
     employee = pending['employee']
-    require_report_member(employee, pending['source'], sites, store)
+    member = require_report_member(employee, pending['source'], sites, store)
     if source_client.base_url == target_client.base_url:
         raise HikvisionError('Source and destination resolve to the same terminal. Check site configuration.')
     verify_identity(target_client, employee)
     verify_identity(source_client, employee)
     source_client.delete_user(employee['employeeNo'])
     store.save(actor, 'transfer', employee['employeeNo'], employee['name'],
-               source=pending['source'], destination=pending['target'], department=pending['department'], job=pending.get('job'))
+               source=pending['source'], destination=pending['target'], department=pending['department'],
+               job=pending.get('job'), old_name=member['roster_name'])
 
 
 def render_login():
@@ -148,6 +159,7 @@ def report_employees(site, sites):
             ids = {normalized(n): str(i) for n, i in config.get('member_ids', {}).items()}
             jobs = {normalized(n): j for n, j in config.get('member_jobs', {}).items()}
             result.append({'name': name, 'employeeNo': ids.get(normalized(name), ''),
+                           'name_keys': configured_names(config, name),
                            'department': department, 'job': jobs.get(normalized(name), config.get('default_job', config.get('label', department)))})
     return result
 
@@ -156,14 +168,18 @@ def filter_report_users(users, site, sites):
     roster = report_employees(site, sites)
     matches = []
     for user in users:
-        # A configured ID must match. Use the exact full name only where the
-        # original static roster has no ID. Never match by first two names.
-        candidates = [r for r in roster if normalized(r['name']) == normalized(user.get('name', ''))
+        # A configured ID must match. ID-less names may use only site-specific,
+        # explicit aliases. Never infer an identity from shared first names.
+        candidates = [r for r in roster if normalized(user.get('name', '')) in r['name_keys']
                       and (not r['employeeNo'] or r['employeeNo'] == str(user.get('employeeNo', '')))]
-        unambiguous = bool(candidates and candidates[0]['employeeNo']) or sum(
-            normalized(u.get('name', '')) == normalized(user.get('name', '')) for u in users) == 1
-        if len(candidates) == 1 and unambiguous:
-            matches.append({**user, 'department': candidates[0]['department'], 'job': candidates[0]['job']})
+        if len(candidates) != 1:
+            continue
+        member = candidates[0]
+        if not member['employeeNo'] and sum(
+                normalized(u.get('name', '')) in member['name_keys'] for u in users) != 1:
+            continue
+        matches.append({**user, 'department': member['department'], 'job': member['job'],
+                        'roster_name': member['name']})
     return sorted(matches, key=lambda r: (normalized(r['name']), str(r.get('employeeNo', ''))))
 
 
@@ -172,8 +188,10 @@ def require_report_member(employee, site, sites, store):
         raise HikvisionError('The site report roster is required before managing this employee.')
     current = copy.deepcopy(sites)
     store.apply(current)
-    if not filter_report_users([employee], site, current):
+    matches = filter_report_users([employee], site, current)
+    if not matches:
         raise HikvisionError('This employee is not in this location’s report roster. Refresh the list.')
+    return matches[0]
 
 
 def department_choice(site, sites, key, store):

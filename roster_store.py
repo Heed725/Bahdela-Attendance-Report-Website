@@ -8,6 +8,16 @@ def normalized(name):
     return ' '.join(str(name).split()).casefold()
 
 
+def configured_names(department, name):
+    """Only explicitly configured full names/aliases may identify a member."""
+    keys = {normalized(name)}
+    for member, aliases in department.get('member_aliases', {}).items():
+        group = {normalized(member), *(normalized(alias) for alias in aliases)}
+        if normalized(name) in group:
+            keys.update(group)
+    return keys
+
+
 class RosterStore:
     def __init__(self, path):
         self.path = str(path)
@@ -67,9 +77,9 @@ class RosterStore:
             site = sites[site_name]
             record = json.loads(encoded)
             for dept in site['employees'].values():
-                dept['members'] = [m for m in dept.get('members', []) if normalized(m) != name_key]
-                dept['member_jobs'] = {n: j for n, j in dept.get('member_jobs', {}).items() if normalized(n) != name_key}
-                dept['member_ids'] = {n: i for n, i in dept.get('member_ids', {}).items() if normalized(n) != name_key}
+                dept['members'] = [m for m in dept.get('members', []) if name_key not in configured_names(dept, m)]
+                dept['member_jobs'] = {n: j for n, j in dept.get('member_jobs', {}).items() if name_key not in configured_names(dept, n)}
+                dept['member_ids'] = {n: i for n, i in dept.get('member_ids', {}).items() if name_key not in configured_names(dept, n)}
             if not record.get('deleted'):
                 department = record['department']
                 if department not in site['employees']:

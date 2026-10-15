@@ -2,11 +2,15 @@ import os
 import tempfile
 import time
 import unittest
+import io
+import zipfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 from roster_store import RosterStore
+from hikvision import HikvisionError
 
 
 class FakeTerminal:
@@ -28,6 +32,90 @@ class FakeTerminal:
 
 
 class InterfaceTests(unittest.TestCase):
+    def test_three_upanga_aliases_load_in_delete_and_transfer_lists(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'_APP_LAUNCHED': '1', 'ROSTER_DB_PATH': folder+'/roster.db'}):
+            terminal = FakeTerminal('http://fake.test')
+            terminal.users = {str(index): {'employeeNo': str(index), 'name': name}
+                              for index, name in enumerate(['Athumani Y Shebly', 'Hamlat S ghindu', 'Mnyeto M Rashid'], 901)}
+            with patch('employee_management.client_for', return_value=terminal):
+                at = AppTest.from_file(str(Path(__file__).parents[1] / 'App.py'), default_timeout=30).run()
+                at.session_state['management_account'] = 'HR'
+                at.session_state['management_last_seen'] = time.time()
+                at.session_state['management_open'] = True
+                at.run()
+                at.selectbox(key='manage_delete_site').select('Puma Upanga').run()
+                at.button(key='manage_delete_Puma Upanga_refresh').click().run()
+                for employee_id, user in terminal.users.items():
+                    self.assertIn(user['name'], at.checkbox(key='manage_delete_Puma Upanga_tick_'+employee_id).label)
+                at.selectbox(key='manage_transfer_source').select('Puma Upanga').run()
+                at.button(key='manage_transfer_Puma Upanga_refresh').click().run()
+                options = at.selectbox(key='manage_transfer_Puma Upanga_choice').options
+                self.assertEqual(len(options), 3)
+                for user in terminal.users.values():
+                    self.assertTrue(any(user['name'] in option for option in options))
+                self.assertFalse(at.exception)
+
+    def test_generated_viewer_and_six_exports_exclude_deleted_staff_after_redeploy(self):
+        # Start with no saved overrides, as happens on a cloud replacement.
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'_APP_LAUNCHED': '1', 'ROSTER_DB_PATH': folder+'/roster.db'}):
+            terminal = FakeTerminal('http://fake.test')
+            terminal.users = {
+                '102': {'employeeNo': '102', 'name': 'Abdallah Iddi Omary'},
+                '103': {'employeeNo': '103', 'name': 'Abubakary Hussein Sharif'},
+            }
+            day = (datetime.now(timezone(timedelta(hours=3))).date() - timedelta(days=1)).isoformat()
+            events = [{'employeeNoString': employee_id, 'name': name, 'time': day+'T08:00:00+03:00'}
+                      for employee_id, name in [('101', 'Ally Mohamedi Sadaka'),
+                                                ('999', 'Abdallah Iddi Removed'),
+                                                ('102', 'ABDALLAH IDDI OMARY')]]
+            response = type('Response', (), {'status_code': 200, 'json': lambda self: {
+                'AcsEvent': {'InfoList': events, 'totalMatches': len(events), 'numOfMatches': len(events)}}})()
+            with patch('employee_management.client_for', return_value=terminal), \
+                 patch('requests.post', return_value=response), \
+                 patch('streamlit.download_button', return_value=False) as downloads:
+                at = AppTest.from_file(str(Path(__file__).parents[1] / 'App.py'), default_timeout=30).run()
+                at.date_input[0].set_value(datetime.fromisoformat(day).date())
+                next(b for b in at.button if b.label == 'View / Generate Reports').click().run()
+                self.assertFalse(at.exception)
+                self.assertFalse(at.error)
+                metrics = {m.label: m.value for m in at.metric}
+                self.assertEqual(metrics['Staff Roster'], '2')
+                self.assertEqual(metrics['Total Records'], '1')
+                self.assertEqual(metrics['Unique Staff'], '1')
+                rendered = ' '.join(frame.value.to_string() for frame in at.dataframe)
+                self.assertIn('Abdallah Iddi Omary', rendered)
+                self.assertIn('Abubakary Hussein Sharif', rendered)
+                self.assertIn('Absent', rendered)
+                self.assertNotIn('Ally Mohamedi Sadaka', rendered)
+                self.assertNotIn('Abdallah Iddi Removed', rendered)
+                self.assertEqual(downloads.call_count, 6)
+                for call in downloads.call_args_list:
+                    filename = call.kwargs['file_name']
+                    data = call.kwargs['data']
+                    data = data.getvalue() if hasattr(data, 'getvalue') else data
+                    if filename.endswith('.pdf'):
+                        self.assertTrue(data.startswith(b'%PDF'))
+                        continue
+                    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                        text = ' '.join(archive.read(name).decode('utf-8') for name in archive.namelist() if name.endswith('.xml'))
+                    self.assertIn('Abdallah Iddi Omary', text)
+                    self.assertIn('Abubakary Hussein Sharif', text)
+                    self.assertNotIn('Ally Mohamedi Sadaka', text)
+                    self.assertNotIn('Abdallah Iddi Removed', text)
+
+    def test_report_does_not_generate_when_current_employee_list_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'_APP_LAUNCHED': '1', 'ROSTER_DB_PATH': folder+'/roster.db'}):
+            with patch('employee_management.client_for') as client_for, \
+                 patch('requests.post') as fetch, \
+                 patch('streamlit.download_button') as downloads:
+                client_for.return_value.search_users.side_effect = HikvisionError('Terminal unavailable')
+                at = AppTest.from_file(str(Path(__file__).parents[1] / 'App.py'), default_timeout=30).run()
+                next(b for b in at.button if b.label == 'View / Generate Reports').click().run()
+                self.assertFalse(at.exception)
+                self.assertIn('Could not verify the current employee roster', at.error[0].value)
+                fetch.assert_not_called()
+                downloads.assert_not_called()
+
     def test_public_reports_and_employee_add_delete(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'_APP_LAUNCHED': '1', 'ROSTER_DB_PATH': folder+'/roster.db'}):
             terminal = FakeTerminal('http://fake.test')

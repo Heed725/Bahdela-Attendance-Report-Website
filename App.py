@@ -5,12 +5,14 @@ Run with:  python App.py   OR   streamlit run App.py
 """
 
 import streamlit as st
-from employee_management import roster_store, render_login, render_management
+from employee_management import roster_store, render_login, render_management, report_site_for
+from hikvision import HikvisionError
+from report_roster import current_report_events
 import requests
 import pandas as pd
 from requests.auth import HTTPDigestAuth
 import urllib3
-import io, sys, subprocess, os, re
+import io, sys, subprocess, os, re, sqlite3
 from datetime import date, timedelta, datetime, timezone
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -368,6 +370,11 @@ SITES = {
                     "Rashidi Majau Masai","Ramadhan Mohamed Yusuph",
                     "Rajabu Ijumaa Hizza","Nesha Habib Losiri","Msabaha Ally Msabaha",
                 ],
+                "member_aliases": {
+                    "Athumani Yusuph Sheby": ["Athumani Y Shebly"],
+                    "Hamlati Shaibu Ghindu": ["Hamlat S ghindu"],
+                    "Mnyeto Miraji Rashidi": ["Mnyeto M Rashid"],
+                },
             },
             "Oil Lubricant": {
                 "label":"OIL LUBRICANT",
@@ -1973,6 +1980,17 @@ if st.button("View / Generate Reports"):
 
     def upd(val,msg): progress.progress(val); status.info(msg)
 
+    status.info("Checking the current employee roster...")
+    try:
+        report_site = report_site_for(st.session_state.selected_site, SITES, management_store)
+    except (HikvisionError, OSError, ValueError, sqlite3.Error) as exc:
+        st.error(f"Could not verify the current employee roster. No report was generated. {exc}")
+        st.stop()
+    ALL_EMPLOYEES = report_site["employees"]
+    DEPT_ORDER = [dk for dk in report_site["dept_order"]
+                  if not ALL_EMPLOYEES[dk].get("visitor_only")]
+    DEPT_COLORS = report_site["dept_colors"]
+
     status.info("Connecting to device...")
     events,err=fetch_events(device_ip,username,password,start_date,end_date,upd)
     if err: st.error(f"Failed to fetch data: {err}"); st.stop()
@@ -1991,6 +2009,7 @@ if st.button("View / Generate Reports"):
     ] + manager_events
 
     progress.progress(0.6); status.info("Processing records...")
+    report_events = current_report_events(report_events, report_site, MOBILE_MANAGER_NAME)
     rows=parse_by_day(report_events,start_date,end_date)
 
     # Show the mobile manager on a branch report only when that branch recorded
