@@ -344,8 +344,7 @@ def render_delete_list(site, sites, store):
         st.rerun()
 
 
-def enroll_employee(employee, site, sites, key):
-    st.caption(f"Biometrics: {employee['name']} · {employee['employeeNo']} · {site}")
+def render_terminal_check(site, sites, key):
     if st.button('Check terminal compatibility', key=key + '_check'):
         require_permission(st.session_state, 'list')
         with st.spinner('Reading terminal model and supported enrollment options…'):
@@ -353,6 +352,10 @@ def enroll_employee(employee, site, sites, key):
     if key + '_compatibility' in st.session_state:
         with st.expander('Terminal compatibility', expanded=True):
             st.json(st.session_state[key + '_compatibility'])
+
+
+def enroll_employee(employee, site, sites, key):
+    st.caption(f"Biometrics: {employee['name']} · {employee['employeeNo']} · {site}")
     photo = st.file_uploader('Face photograph (JPEG)', type=['jpg', 'jpeg'], key=key + '_photo')
     st.caption('Use a clear, front-facing JPEG up to 20 MB. Large photographs are resized automatically for the terminal.')
     if st.button('Save face at this location', disabled=photo is None, key=key + '_face'):
@@ -404,6 +407,7 @@ def _render_management(sites, store):
     with add_tab:
         site = st.selectbox('Where should this person be placed? *', names, index=None, key='manage_add_site')
         if site:
+            render_terminal_check(site, sites, 'manage_add_' + site)
             department = department_choice(site, sites, 'manage_add_department_' + site, store)
             job = job_choice(site, department, sites, 'manage_add_job_' + site + '_' + department) if department else None
             with st.form('manage_add_form_' + site):

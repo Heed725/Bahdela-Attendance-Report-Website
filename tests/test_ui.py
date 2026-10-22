@@ -32,6 +32,22 @@ class FakeTerminal:
 
 
 class InterfaceTests(unittest.TestCase):
+    def test_terminal_compatibility_check_needs_no_new_employee(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'_APP_LAUNCHED': '1', 'ROSTER_DB_PATH': folder+'/roster.db'}):
+            terminal = FakeTerminal('http://fake.test')
+            terminal.terminal_diagnostics = lambda: {'Device': {'model': 'Example Terminal'}}
+            with patch('employee_management.client_for', return_value=terminal):
+                at = AppTest.from_file(str(Path(__file__).parents[1] / 'App.py'), default_timeout=30)
+                at.session_state['management_account'] = 'HR'
+                at.session_state['management_last_seen'] = time.time()
+                at.session_state['management_open'] = True
+                at.run()
+                at.selectbox(key='manage_add_site').select('Puma Survey').run()
+                at.button(key='manage_add_Puma Survey_check').click().run()
+                self.assertFalse(at.exception)
+                self.assertTrue(at.json)
+                self.assertEqual(terminal.users, {})
+
     def test_streamlit_runner_does_not_launch_second_server_and_shows_release(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'ROSTER_DB_PATH': folder+'/roster.db'}), \
                 patch('subprocess.call') as relaunch:
