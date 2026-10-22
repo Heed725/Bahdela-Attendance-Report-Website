@@ -177,7 +177,7 @@ def read_face(client, employee_no):
         path = location.path + ('?' + location.query if location.query else '')
         download = client._send('GET', path, allow_redirects=False)
         if download.status_code != 200:
-            raise HikvisionError('Could not download the enrolled face photograph. Source employee remains active.')
+            raise HikvisionError(f'Could not download the enrolled face photograph (HTTP {download.status_code}). Source employee remains active.')
         image = download.content
     else:
         raise HikvisionError('The terminal did not export the enrolled face photograph. Source employee remains active.')

@@ -103,7 +103,10 @@ def prepare_transfer(state, source_client, target_client, store, employee, sourc
         raise HikvisionError('That employee ID already exists at the destination. No records were changed.')
     if existing and normalized(existing.get('name', '')) != normalized(live['name']):
         raise HikvisionError('The destination employee ID belongs to a different person. No records were changed.')
-    credentials = export_credentials(source_client, live)
+    try:
+        credentials = export_credentials(source_client, live)
+    except HikvisionError as exc:
+        raise HikvisionError(f'Source {source}: {exc}') from None
     ensure_cards_available(target_client, live['employeeNo'], credentials)
     if not existing:
         allowed = ('employeeNo', 'name', 'userType', 'gender', 'Valid', 'doorRight', 'RightPlan')
@@ -133,7 +136,10 @@ def _copy_transfer_credentials(state, source_client, target_client, store, pendi
     saved = verify_identity(target_client, pending['employee'])
     if pending.get('existing_destination'):
         _verify_existing_access(live, saved)
-    destination_manifest = verify_credentials(target_client, saved, credentials)
+    try:
+        destination_manifest = verify_credentials(target_client, saved, credentials)
+    except HikvisionError as exc:
+        raise HikvisionError(f'Destination {pending["target"]}: {exc}') from None
     # Reject enrollment changes during the copy; the source must stay intact.
     fresh = export_credentials(source_client, verify_identity(source_client, pending['employee']))
     if fresh.manifest() != credentials.manifest():
