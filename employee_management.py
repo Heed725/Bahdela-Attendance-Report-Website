@@ -91,7 +91,7 @@ def delete_employees(state, client, store, employees, site, sites):
     return {'deleted': deleted, 'failed': failed}
 
 
-def prepare_transfer(state, source_client, target_client, store, employee, source, target, department, sites=None, job=None, reconcile_existing=False):
+def prepare_transfer(state, source_client, target_client, store, employee, source, target, department, sites=None, job=None, reconcile_existing=False, include_face=True):
     require_permission(state, 'transfer')
     require_report_member(employee, source, sites, store)
     if source == target or source_client.base_url == target_client.base_url:
@@ -104,7 +104,7 @@ def prepare_transfer(state, source_client, target_client, store, employee, sourc
     if existing and normalized(existing.get('name', '')) != normalized(live['name']):
         raise HikvisionError('The destination employee ID belongs to a different person. No records were changed.')
     try:
-        credentials = export_credentials(source_client, live)
+        credentials = export_credentials(source_client, live, include_face=include_face)
     except HikvisionError as exc:
         raise HikvisionError(f'Source {source}: {exc}') from None
     ensure_cards_available(target_client, live['employeeNo'], credentials)
@@ -118,7 +118,7 @@ def prepare_transfer(state, source_client, target_client, store, employee, sourc
                'source': source, 'target': target, 'department': department, 'job': job,
                'source_url': source_client.base_url, 'target_url': target_client.base_url,
                'credentials_verified': False, 'credential_counts': credentials.counts(),
-               'existing_destination': bool(existing)}
+               'existing_destination': bool(existing), 'include_face': bool(include_face)}
     # Keep only metadata in session so a partial copy can be retried safely.
     if not existing:
         state['management_transfer'] = pending
@@ -138,11 +138,13 @@ def _copy_transfer_credentials(state, source_client, target_client, store, pendi
         _verify_existing_access(live, saved)
     try:
         destination_manifest = verify_credentials(target_client, saved, credentials,
-                                                  complete=bool(pending.get('existing_destination')))
+                                                  complete=bool(pending.get('existing_destination')),
+                                                  include_face=pending.get('include_face', True))
     except HikvisionError as exc:
         raise HikvisionError(f'Destination {pending["target"]}: {exc}') from None
     # Reject enrollment changes during the copy; the source must stay intact.
-    fresh = export_credentials(source_client, verify_identity(source_client, pending['employee']))
+    fresh = export_credentials(source_client, verify_identity(source_client, pending['employee']),
+                               include_face=pending.get('include_face', True))
     if fresh.manifest() != credentials.manifest():
         raise HikvisionError('Source credentials changed during copying. Retry the copy before finishing.')
     actor = require_permission(state, 'transfer')
@@ -171,7 +173,7 @@ def retry_transfer_credentials(state, source_client, target_client, store, pendi
     require_report_member(pending['employee'], pending['source'], sites, store)
     live = verify_identity(source_client, pending['employee'])
     verify_identity(target_client, pending['employee'])
-    credentials = export_credentials(source_client, live)
+    credentials = export_credentials(source_client, live, include_face=pending.get('include_face', True))
     _copy_transfer_credentials(state, source_client, target_client, store, pending, live, credentials)
     return pending
 
@@ -187,11 +189,12 @@ def finish_transfer(state, source_client, target_client, store, pending, sites=N
     live = verify_identity(source_client, employee)
     if pending.get('existing_destination'):
         _verify_existing_access(live, saved)
-    credentials = export_credentials(source_client, live)
+    credentials = export_credentials(source_client, live, include_face=pending.get('include_face', True))
     if credentials.manifest() != pending['source_manifest']:
         raise HikvisionError('Source credentials changed. Retry the credential copy before finishing.')
     destination = verify_credentials(target_client, saved, credentials,
-                                     complete=bool(pending.get('existing_destination')))
+                                     complete=bool(pending.get('existing_destination')),
+                                     include_face=pending.get('include_face', True))
     if destination != pending['destination_manifest']:
         raise HikvisionError('Destination credentials changed. Retry the credential copy before finishing.')
     actor = require_permission(state, 'transfer')
@@ -464,6 +467,8 @@ def _render_management(sites, store):
         pending = st.session_state.get('management_transfer')
         if pending:
             st.info(f"{pending['employee']['name']}: source remains active at {pending['source']} until you finish the transfer to {pending['target']}.")
+            if not pending.get('include_face', True):
+                st.warning('Face photograph excluded from this transfer. The source photo will not be copied; existing destination photos are kept.')
             ready = pending.get('credentials_verified', False)
             if ready:
                 counts = pending['credential_counts']
@@ -500,10 +505,13 @@ def _render_management(sites, store):
                 job = job_choice(target, department, sites, 'manage_transfer_job_' + target + '_' + department) if department else None
                 confirmed = st.checkbox('I confirm the selected employee and destination.', key='manage_transfer_start_confirm_' + source)
                 reconcile_existing = st.checkbox('Verify an existing destination account for this same employee without overwriting its credentials.', key='manage_transfer_reconcile_' + source)
+                include_face = st.checkbox('Copy enrolled face photograph', value=True, key='manage_transfer_include_face_' + source)
+                if not include_face:
+                    st.warning('Only fingerprints and cards will be transferred. The source face photo will not be copied; existing destination photos are kept.')
                 if st.button('Prepare destination', disabled=not (employee and target and department and job and confirmed)):
                     st.session_state.pop('manage_transfer_confirm', None)
                     with st.spinner('Copying employee, fingerprints, face photograph and cards…'):
-                        st.session_state['management_transfer'] = prepare_transfer(st.session_state, client_for(source, sites), client_for(target, sites), store, employee, source, target, department, sites=sites, job=job, reconcile_existing=reconcile_existing)
+                        st.session_state['management_transfer'] = prepare_transfer(st.session_state, client_for(source, sites), client_for(target, sites), store, employee, source, target, department, sites=sites, job=job, reconcile_existing=reconcile_existing, include_face=include_face)
                     st.rerun()
     with delete_tab:
         site = st.selectbox('Delete from which location? *', names, index=None, key='manage_delete_site')

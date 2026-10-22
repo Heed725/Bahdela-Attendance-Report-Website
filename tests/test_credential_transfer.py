@@ -308,6 +308,37 @@ class CredentialTransferTests(unittest.TestCase):
         self.assertEqual(self.sites['A']['employees']['Shop']['members'], [])
         self.assertEqual(self.sites['B']['employees']['Shop']['member_jobs']['Test Person'], 'CASHIER')
 
+    def test_explicit_photo_exclusion_copies_all_cards_and_fingers_without_reading_face(self):
+        self.source.fail_path = '/ISAPI/Intelligent/FDLib/FDSearch'
+        pending = self.prepare(include_face=False)
+        self.assertEqual(pending['credential_counts'], {'cards': 2, 'fingerprints': 2, 'faces': 0})
+        self.assertFalse(pending['include_face'])
+        self.assertEqual(self.target.fingers, self.source.fingers)
+        self.assertEqual(self.target.cards, self.source.cards)
+        retry_transfer_credentials(self.state, self.source.client, self.target.client, self.store, pending, sites=self.sites)
+        self.finish(pending)
+        self.assertNotIn('201', self.source.users)
+        self.assertFalse(self.target.faces)
+        self.assertFalse(any('/FDLib/' in path for terminal in (self.source, self.target) for _, path in terminal.calls))
+
+    def test_explicit_photo_exclusion_preserves_existing_destination_photo(self):
+        self.existing_copy()
+        self.target.faces['201'] = jpeg('blue')
+        photo = self.target.faces['201']
+        self.source.fail_path = self.target.fail_path = '/ISAPI/Intelligent/FDLib/FDSearch'
+        pending = self.prepare(include_face=False, reconcile_existing=True)
+        self.finish(pending)
+        self.assertEqual(self.target.faces['201'], photo)
+        self.assert_no_destination_writes()
+
+    def test_photo_exclusion_does_not_allow_missing_fingerprints(self):
+        self.existing_copy()
+        self.target.fingers['201'] = []
+        with self.assertRaisesRegex(HikvisionError, 'could not be verified'):
+            self.prepare(include_face=False, reconcile_existing=True)
+        self.assertIn('201', self.source.users)
+        self.assert_no_destination_writes()
+
     def test_unsupported_export_stops_before_destination_creation(self):
         self.source.fail_path = '/ISAPI/AccessControl/FingerPrintUpload'
         with self.assertRaisesRegex(HikvisionError, 'notSupport'):

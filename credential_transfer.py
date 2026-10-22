@@ -191,7 +191,7 @@ def read_face(client, employee_no):
     return image
 
 
-def export_credentials(client, user, needed=None):
+def export_credentials(client, user, needed=None, include_face=True):
     employee_no = str(user['employeeNo'])
     bundle = Credentials()
     for kind, count_key, reader in (
@@ -199,6 +199,8 @@ def export_credentials(client, user, needed=None):
         ('fingerprints', 'numOfFP', lambda: read_fingerprints(client, employee_no)),
         ('faces', 'numOfFace', lambda: read_face(client, employee_no)),
     ):
+        if kind == 'faces' and not include_face:
+            continue
         expected = int(user[count_key]) if count_key in user else None
         if needed is not None and not needed[kind]:
             continue
@@ -267,8 +269,8 @@ def copy_credentials(client, user, bundle):
                 'Could not copy the face photograph')
 
 
-def verify_credentials(client, user, expected, complete=False):
-    actual = export_credentials(client, user, needed=None if complete else expected.counts())
+def verify_credentials(client, user, expected, complete=False, include_face=True):
+    actual = export_credentials(client, user, needed=None if complete else expected.counts(), include_face=include_face)
     source, destination = expected.manifest(), actual.manifest()
     if source['cards'] != destination['cards'] or source['fingerprints'] != destination['fingerprints']:
         raise HikvisionError('Destination cards or fingerprints could not be verified. Source employee remains active.')
