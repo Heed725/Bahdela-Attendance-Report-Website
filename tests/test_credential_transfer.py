@@ -182,12 +182,89 @@ class CredentialTransferTests(unittest.TestCase):
                              for number in ('001234', '005678')]
         self.source.faces['201'] = jpeg()
 
-    def prepare(self):
+    def prepare(self, **kwargs):
         return prepare_transfer(self.state, self.source.client, self.target.client, self.store,
-                                self.employee, 'A', 'B', 'Shop', sites=self.sites, job='CASHIER')
+                                self.employee, 'A', 'B', 'Shop', sites=self.sites, job='CASHIER', **kwargs)
 
     def finish(self, pending):
         finish_transfer(self.state, self.source.client, self.target.client, self.store, pending, sites=self.sites)
+
+    def existing_copy(self):
+        for key in ('users', 'cards', 'fingers', 'faces'):
+            setattr(self.target, key, copy.deepcopy(getattr(self.source, key)))
+
+    def assert_no_destination_writes(self):
+        writes = [path for method, path in self.target.calls
+                  if path.endswith(('/Record', '/SetUp', '/Delete')) or method == 'PUT']
+        self.assertEqual(writes, [])
+
+    def test_existing_account_still_rejected_without_explicit_reconciliation(self):
+        self.existing_copy()
+        with self.assertRaisesRegex(HikvisionError, 'already exists'):
+            self.prepare()
+        self.assert_no_destination_writes()
+        self.assertNotIn('management_transfer', self.state)
+
+    def test_matching_existing_account_verified_without_overwriting_then_transfer_finishes(self):
+        self.existing_copy()
+        pending = self.prepare(reconcile_existing=True)
+        self.assertTrue(pending['existing_destination'])
+        self.assertTrue(pending['credentials_verified'])
+        self.assertEqual(pending['credential_counts'], {'cards': 2, 'fingerprints': 2, 'faces': 1})
+        self.assert_no_destination_writes()
+        self.finish(pending)
+        self.assertNotIn('201', self.source.users)
+        self.assertIn('201', self.target.users)
+        self.assert_no_destination_writes()
+
+    def test_existing_id_for_other_person_cannot_be_reconciled(self):
+        self.existing_copy()
+        self.target.users['201']['name'] = 'Other Person'
+        with self.assertRaisesRegex(HikvisionError, 'different person'):
+            self.prepare(reconcile_existing=True)
+        self.assert_no_destination_writes()
+        self.assertEqual(self.store.history(), [])
+
+    def test_existing_different_credentials_block_reconciliation_without_overwriting(self):
+        self.existing_copy()
+        self.target.fingers['201'][0]['fingerData'] = 'destination-template'
+        with self.assertRaisesRegex(HikvisionError, 'could not be verified'):
+            self.prepare(reconcile_existing=True)
+        self.assertEqual(self.target.fingers['201'][0]['fingerData'], 'destination-template')
+        self.assertIn('201', self.source.users)
+        self.assertNotIn('management_transfer', self.state)
+        self.assert_no_destination_writes()
+        self.assertEqual(self.store.history(), [])
+
+    def test_existing_different_access_settings_block_source_removal(self):
+        self.existing_copy()
+        self.target.users['201']['Valid'] = {'enable': False}
+        with self.assertRaisesRegex(HikvisionError, 'access settings differ'):
+            self.prepare(reconcile_existing=True)
+        self.assertIn('201', self.source.users)
+        self.assert_no_destination_writes()
+        self.assertEqual(self.store.history(), [])
+
+    def test_reconciliation_retry_never_overwrites_changed_destination_credentials(self):
+        self.existing_copy()
+        pending = self.prepare(reconcile_existing=True)
+        self.target.fingers['201'][0]['fingerData'] = 'changed-after-verification'
+        with self.assertRaisesRegex(HikvisionError, 'could not be verified'):
+            retry_transfer_credentials(self.state, self.source.client, self.target.client, self.store, pending, sites=self.sites)
+        self.assertFalse(pending['credentials_verified'])
+        self.assert_no_destination_writes()
+        with self.assertRaisesRegex(HikvisionError, 'Copy and verify'):
+            self.finish(pending)
+        self.assertIn('201', self.source.users)
+
+    def test_existing_access_settings_checked_again_before_source_deletion(self):
+        self.existing_copy()
+        pending = self.prepare(reconcile_existing=True)
+        self.target.users['201']['doorRight'] = '2'
+        with self.assertRaisesRegex(HikvisionError, 'access settings differ'):
+            self.finish(pending)
+        self.assertIn('201', self.source.users)
+        self.assert_no_destination_writes()
 
     def test_full_transfer_preserves_all_credentials_and_history(self):
         self.source.page_size = 1

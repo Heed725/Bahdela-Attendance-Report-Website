@@ -91,37 +91,48 @@ def delete_employees(state, client, store, employees, site, sites):
     return {'deleted': deleted, 'failed': failed}
 
 
-def prepare_transfer(state, source_client, target_client, store, employee, source, target, department, sites=None, job=None):
+def prepare_transfer(state, source_client, target_client, store, employee, source, target, department, sites=None, job=None, reconcile_existing=False):
     require_permission(state, 'transfer')
     require_report_member(employee, source, sites, store)
     if source == target or source_client.base_url == target_client.base_url:
         raise HikvisionError('Choose a different destination location and terminal.')
     live = verify_identity(source_client, employee)
     # Export every enrolled credential before changing either terminal.
-    if target_client.get_user(live['employeeNo']):
+    existing = target_client.get_user(live['employeeNo'])
+    if existing and not reconcile_existing:
         raise HikvisionError('That employee ID already exists at the destination. No records were changed.')
+    if existing and normalized(existing.get('name', '')) != normalized(live['name']):
+        raise HikvisionError('The destination employee ID belongs to a different person. No records were changed.')
     credentials = export_credentials(source_client, live)
     ensure_cards_available(target_client, live['employeeNo'], credentials)
-    allowed = ('employeeNo', 'name', 'userType', 'gender', 'Valid', 'doorRight', 'RightPlan')
-    user = {key: live[key] for key in allowed if key in live}
-    result = target_client._request('POST', '/ISAPI/AccessControl/UserInfo/Record?format=json', json={'UserInfo': user})
-    if not result.ok:
-        raise HikvisionError('Destination employee was not created: ' + response_message(result))
+    if not existing:
+        allowed = ('employeeNo', 'name', 'userType', 'gender', 'Valid', 'doorRight', 'RightPlan')
+        user = {key: live[key] for key in allowed if key in live}
+        result = target_client._request('POST', '/ISAPI/AccessControl/UserInfo/Record?format=json', json={'UserInfo': user})
+        if not result.ok:
+            raise HikvisionError('Destination employee was not created: ' + response_message(result))
     pending = {'employee': {'employeeNo': str(employee['employeeNo']), 'name': employee['name']},
                'source': source, 'target': target, 'department': department, 'job': job,
                'source_url': source_client.base_url, 'target_url': target_client.base_url,
-               'credentials_verified': False, 'credential_counts': credentials.counts()}
+               'credentials_verified': False, 'credential_counts': credentials.counts(),
+               'existing_destination': bool(existing)}
     # Keep only metadata in session so a partial copy can be retried safely.
-    state['management_transfer'] = pending
+    if not existing:
+        state['management_transfer'] = pending
     _copy_transfer_credentials(state, source_client, target_client, store, pending, live, credentials)
+    state['management_transfer'] = pending
     return pending
 
 
 def _copy_transfer_credentials(state, source_client, target_client, store, pending, live, credentials):
     pending['credentials_verified'] = False
     verify_identity(target_client, pending['employee'])
-    copy_credentials(target_client, live, credentials)
+    # Reconciliation only verifies an existing account; it never overwrites it.
+    if not pending.get('existing_destination'):
+        copy_credentials(target_client, live, credentials)
     saved = verify_identity(target_client, pending['employee'])
+    if pending.get('existing_destination'):
+        _verify_existing_access(live, saved)
     destination_manifest = verify_credentials(target_client, saved, credentials)
     # Reject enrollment changes during the copy; the source must stay intact.
     fresh = export_credentials(source_client, verify_identity(source_client, pending['employee']))
@@ -132,6 +143,12 @@ def _copy_transfer_credentials(state, source_client, target_client, store, pendi
                destination=pending['target'], department=pending['department'], job=pending.get('job'))
     pending.update(credentials_verified=True, credential_counts=credentials.counts(),
                    source_manifest=credentials.manifest(), destination_manifest=destination_manifest)
+
+
+def _verify_existing_access(source, destination):
+    for key in ('userType', 'Valid', 'doorRight', 'RightPlan'):
+        if key in source and destination.get(key) != source[key]:
+            raise HikvisionError('Existing destination access settings differ from the source. No settings were overwritten; source employee remains active.')
 
 
 def _check_transfer_terminals(source_client, target_client, pending):
@@ -161,6 +178,8 @@ def finish_transfer(state, source_client, target_client, store, pending, sites=N
         raise HikvisionError('Copy and verify all credentials before finishing the transfer. Source employee remains active.')
     saved = verify_identity(target_client, employee)
     live = verify_identity(source_client, employee)
+    if pending.get('existing_destination'):
+        _verify_existing_access(live, saved)
     credentials = export_credentials(source_client, live)
     if credentials.manifest() != pending['source_manifest']:
         raise HikvisionError('Source credentials changed. Retry the credential copy before finishing.')
@@ -440,7 +459,8 @@ def _render_management(sites, store):
             ready = pending.get('credentials_verified', False)
             if ready:
                 counts = pending['credential_counts']
-                st.success(f"Copied and verified: {counts['fingerprints']} fingerprint(s), {counts['faces']} face photograph(s), {counts['cards']} card(s).")
+                action = 'Verified existing account' if pending.get('existing_destination') else 'Copied and verified'
+                st.success(f"{action}: {counts['fingerprints']} fingerprint(s), {counts['faces']} face photograph(s), {counts['cards']} card(s).")
             else:
                 st.warning('Credential copying is incomplete. The source employee remains active. Retry copying before finishing.')
             if st.button('Retry credential copy', key='manage_transfer_retry'):
@@ -467,10 +487,11 @@ def _render_management(sites, store):
                 department = department_choice(target, sites, 'manage_transfer_department_' + target, store) if target else None
                 job = job_choice(target, department, sites, 'manage_transfer_job_' + target + '_' + department) if department else None
                 confirmed = st.checkbox('I confirm the selected employee and destination.', key='manage_transfer_start_confirm_' + source)
+                reconcile_existing = st.checkbox('Verify an existing destination account for this same employee without overwriting its credentials.', key='manage_transfer_reconcile_' + source)
                 if st.button('Prepare destination', disabled=not (employee and target and department and job and confirmed)):
                     st.session_state.pop('manage_transfer_confirm', None)
                     with st.spinner('Copying employee, fingerprints, face photograph and cards…'):
-                        st.session_state['management_transfer'] = prepare_transfer(st.session_state, client_for(source, sites), client_for(target, sites), store, employee, source, target, department, sites=sites, job=job)
+                        st.session_state['management_transfer'] = prepare_transfer(st.session_state, client_for(source, sites), client_for(target, sites), store, employee, source, target, department, sites=sites, job=job, reconcile_existing=reconcile_existing)
                     st.rerun()
     with delete_tab:
         site = st.selectbox('Delete from which location? *', names, index=None, key='manage_delete_site')
