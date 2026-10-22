@@ -13,7 +13,8 @@ from registration_sites import load_sites
 from roster_store import RosterStore, normalized, configured_names
 from report_roster import current_report_roster
 from credential_transfer import (export_credentials, ensure_cards_available,
-                                 copy_credentials, verify_credentials)
+                                 copy_credentials, verify_credentials, Credentials, read_fingerprints)
+from biometric_protocol import prepare_face_jpeg
 
 
 def secrets_dict():
@@ -346,25 +347,33 @@ def render_delete_list(site, sites, store):
 def enroll_employee(employee, site, sites, key):
     st.caption(f"Biometrics: {employee['name']} · {employee['employeeNo']} · {site}")
     photo = st.file_uploader('Face photograph (JPEG)', type=['jpg', 'jpeg'], key=key + '_photo')
+    st.caption('Use a clear, front-facing JPEG up to 20 MB. Large photographs are resized automatically for the terminal.')
     if st.button('Save face at this location', disabled=photo is None, key=key + '_face'):
         require_permission(st.session_state, 'enroll')
         client = client_for(site, sites)
         verify_identity(client, employee)
-        result = client.upload_face(employee['employeeNo'], photo.getvalue(), photo.name)
+        result = client.upload_face(employee['employeeNo'], photo.getvalue(), photo.name, name=employee['name'])
         if not result.ok:
             raise HikvisionError('Face was not saved: ' + response_message(result))
+        saved = verify_identity(client, employee)
+        verify_credentials(client, saved, Credentials(face=prepare_face_jpeg(photo.getvalue())))
         st.success('Face saved at ' + site)
     st.caption('For fingerprint capture, the employee must stand beside this location’s terminal.')
     if st.button('Capture and save fingerprint', key=key + '_finger'):
         require_permission(st.session_state, 'enroll')
         client = client_for(site, sites)
         verify_identity(client, employee)
-        captured = client.capture_fingerprint(1)
+        with st.spinner('Place the employee’s finger on the selected station’s scanner…'):
+            captured = client.capture_fingerprint(1)
         if not captured.data:
-            raise HikvisionError(captured.message or 'No fingerprint returned by the terminal.')
+            raise HikvisionError('Fingerprint capture failed: ' + (captured.message or 'No fingerprint returned by the terminal.'))
         result = client.apply_fingerprint(employee['employeeNo'], captured.data, 1)
         if not result.ok:
             raise HikvisionError('Fingerprint was not saved: ' + response_message(result))
+        verify_identity(client, employee)
+        fingers = read_fingerprints(client, employee['employeeNo'])
+        if not any(finger['fingerPrintID'] == 1 and finger['fingerData'] == captured.data for finger in fingers):
+            raise HikvisionError('The terminal did not confirm the saved fingerprint. Try again before relying on it.')
         st.success('Fingerprint saved at ' + site)
 
 

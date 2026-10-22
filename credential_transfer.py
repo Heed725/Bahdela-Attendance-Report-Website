@@ -41,6 +41,8 @@ def checked(result, action):
         status = result.payload.get('ResponseStatus', result.payload)
         safe = {key: status[key] for key in ('statusString', 'subStatusCode')
                 if isinstance(status, dict) and key in status}
+        if 'FingerPrintStatus' in result.payload:
+            safe['FingerPrintStatus'] = result.payload['FingerPrintStatus']
         reason = response_message(ApiResult(False, result.status_code, safe))
         raise HikvisionError(f'{action}: {reason} Source employee remains active.')
     return result.payload
@@ -253,8 +255,6 @@ def copy_credentials(client, user, bundle):
                 str(item.get('cardReaderRecvStatus')) != '1' for item in statuses):
             raise HikvisionError('The destination reader rejected a fingerprint. Source employee remains active.')
     if bundle.face:
-        metadata = {'faceLibType': 'blackFD', 'FDID': '1', 'FPID': employee_no,
-                    'name': user['name'], 'saveFacePic': True}
         # Retrying a partial transfer may already have copied the face.
         existing_face = read_face(client, employee_no)
         method, path = 'POST', '/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json'
@@ -263,9 +263,8 @@ def copy_credentials(client, user, bundle):
             method = 'PUT'
             path = '/ISAPI/Intelligent/FDLib/FDSearch?' + urlencode(
                 {'format': 'json', 'FDID': '1', 'FPID': employee_no, 'faceLibType': 'blackFD'})
-        checked(client._request(method, path, files={
-            'FaceDataRecord': (None, json.dumps(metadata), 'application/json'),
-            'FaceImage': ('face.jpg', bundle.face, 'image/jpeg')}), 'Could not copy the face photograph')
+        checked(client.upload_face(employee_no, bundle.face, name=user['name'], method=method, path=path),
+                'Could not copy the face photograph')
 
 
 def verify_credentials(client, user, expected):

@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from urllib.parse import urlsplit
 from unittest.mock import MagicMock, patch
+from email import policy
+from email.parser import BytesParser
 
 from PIL import Image
 import requests
@@ -15,11 +17,12 @@ from credential_transfer import export_credentials, read_face, search_cards
 from employee_management import prepare_transfer, retry_transfer_credentials, finish_transfer
 from hikvision import HikvisionClient, HikvisionError
 from roster_store import RosterStore
+from biometric_protocol import prepare_face_jpeg
 
 
 def jpeg(color='red'):
     stream = io.BytesIO()
-    Image.new('RGB', (16, 16), color).save(stream, 'JPEG')
+    Image.new('RGB', (128, 128), color).save(stream, 'JPEG')
     return stream.getvalue()
 
 
@@ -117,10 +120,13 @@ class MemoryTerminal:
             return self.response({'FingerPrintStatus': {'StatusList': [{'id': 1, 'cardReaderRecvStatus': '1'}]}})
         if ((path.endswith('/FaceDataRecord') and method == 'POST') or
                 (path.endswith('/FDSearch') and method == 'PUT')):
-            files = kwargs['files']
-            metadata = json.loads(files['FaceDataRecord'][1])
+            message = BytesParser(policy=policy.default).parsebytes(
+                ('Content-Type: ' + kwargs['headers']['Content-Type'] + '\r\n\r\n').encode() + kwargs['data'])
+            fields = {part.get_param('name', header='content-disposition'): part.get_payload(decode=True)
+                      for part in message.iter_parts()}
+            metadata = json.loads(fields['FaceDataRecord'])
             if not self.drop_face:
-                self.faces[metadata['FPID']] = files['FaceImage'][1]
+                self.faces[metadata['FPID']] = fields['FaceImage']
             return self.response(ok)
         if path.endswith('/FDSearch') and method == 'POST':
             employee_no = body['FPID']
@@ -191,7 +197,7 @@ class CredentialTransferTests(unittest.TestCase):
         self.assertEqual(pending['credential_counts'], {'cards': 2, 'fingerprints': 2, 'faces': 1})
         self.assertEqual(self.target.fingers, self.source.fingers)
         self.assertEqual(self.target.cards, self.source.cards)
-        self.assertEqual(self.target.faces, self.source.faces)
+        self.assertEqual(self.target.faces['201'], prepare_face_jpeg(self.source.faces['201']))
         session_text = json.dumps(self.state)
         db_text = json.dumps(self.store.history())
         for secret in ('template-one', 'template-seven', '001234', '005678'):
@@ -236,7 +242,7 @@ class CredentialTransferTests(unittest.TestCase):
 
     def test_partial_copy_can_retry_without_duplicate_cards_or_source_deletion(self):
         self.target.reject_finger = True
-        with self.assertRaisesRegex(HikvisionError, 'reader rejected'):
+        with self.assertRaisesRegex(HikvisionError, 'reader memory is full'):
             self.prepare()
         pending = self.state['management_transfer']
         self.assertFalse(pending['credentials_verified'])
@@ -356,7 +362,7 @@ render_management(sites, store)
             at.checkbox(key='manage_transfer_start_confirm_A').check().run()
             next(b for b in at.button if b.label == 'Prepare destination').click().run()
             self.assertFalse(at.exception)
-            self.assertTrue(any('reader rejected' in error.value for error in at.error))
+            self.assertTrue(any('reader memory is full' in error.value for error in at.error))
             at.run()
             self.assertTrue(next(b for b in at.button if b.label == 'Finish transfer').disabled)
             self.assertTrue(at.checkbox(key='manage_transfer_confirm').disabled)

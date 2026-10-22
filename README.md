@@ -37,6 +37,12 @@ Pending transfers are kept in the current Streamlit session, not persisted acros
 
 Device failures stop the workflow and are displayed. A rejected destination or duplicate ID never triggers source deletion. Removal is confirmed by checking the terminal again. The app only sends a single explicitly selected employee ID to the delete endpoint; it never requests deletion of all users.
 
+### Face and fingerprint enrollment
+
+Fingerprint capture sends a namespaced XML `CaptureFingerPrintCond` request to `/ISAPI/AccessControl/CaptureFingerPrint`, and reads XML, JSON or multipart capture replies. Firmware that explicitly rejects that format is retried once using the JSON endpoint with the correct `CaptureFingerPrintCond` wrapper. Timeouts and busy responses are not retried automatically. The employee must place their finger on the selected station's scanner while capture is running. Fingerprint-reader failures inside HTTP 200 replies are treated as failures, and enrollment is only reported successful after reading the template back.
+
+Face enrollment accepts readable JPEGs up to 20 MB with a minimum dimension of 80 pixels. It applies orientation, resizes to fit 640 × 640 and encodes within 200 KB. Uploads include the employee name, face-library/person identifiers and ordered metadata/image parts with explicit byte lengths. A firmware format rejection may retry the older `img` image-part name. The same upload handling is used during transfers. A successful upload is checked against the saved photograph before showing success. Error messages distinguish fingerprint capture, fingerprint saving and face saving; XML `ResponseStatus` errors are parsed rather than displayed as raw markup. These protocol checks do not replace a recognition test on the physical terminal.
+
 ## Locations and connections
 
 Locations match [Bahdela Hikvision Registration](https://github.com/Heed725/Bahdela_Hikvision_Registration_Streamlit): Buguruni, Puma Upanga, Puma Ocean Road, Puma Survey, India, Kibaha and Livingstone. The registration repository itself is unchanged.

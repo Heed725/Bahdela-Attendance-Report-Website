@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -9,6 +8,7 @@ from urllib.parse import urlparse
 import requests
 from requests import Response
 from requests.auth import HTTPDigestAuth
+from biometric_protocol import decode_payload, face_multipart, format_rejected, prepare_face_jpeg
 
 
 class HikvisionError(RuntimeError):
@@ -32,6 +32,24 @@ class CapturedFingerprint:
 
 def response_message(result: ApiResult) -> str:
     payload = result.payload or {}
+    fingerprint = payload.get('FingerPrintStatus')
+    if isinstance(fingerprint, dict):
+        entries = fingerprint.get('StatusList', [])
+        if isinstance(entries, dict):
+            entries = entries.get('Status', entries)
+            if isinstance(entries, dict):
+                entries = [entries]
+        if isinstance(entries, list):
+            meanings = {'0': 'failed', '2': 'reader is offline', '3': 'poor quality; try again',
+                        '4': 'reader memory is full', '5': 'fingerprint already exists',
+                        '7': 'invalid fingerprint slot', '8': 'reader does not need this template',
+                        '10': 'reader firmware is too old'}
+            for entry in entries:
+                code = str(entry.get('cardReaderRecvStatus', '')) if isinstance(entry, dict) else ''
+                if code != '1':
+                    return 'Fingerprint was rejected: ' + meanings.get(code, 'unconfirmed reader status')
+        if fingerprint.get('status') == 'failed':
+            return 'Fingerprint was rejected by the terminal.'
     status = payload.get("ResponseStatus", payload)
     details = []
     for key in ("statusString", "subStatusCode", "errorMsg", "message"):
@@ -95,13 +113,27 @@ class HikvisionClient:
             data = response.json()
             return data if isinstance(data, dict) else {"data": data}
         except ValueError:
-            return {}
+            return decode_payload(response)
 
     @staticmethod
     def _is_success(payload: dict[str, Any]) -> bool:
         status = payload.get("ResponseStatus", payload)
         if not isinstance(status, dict) or not payload:
             return False
+        fingerprint = payload.get('FingerPrintStatus')
+        if isinstance(fingerprint, dict):
+            if str(fingerprint.get('status', 'success')).lower() != 'success':
+                return False
+            entries = fingerprint.get('StatusList', [])
+            if isinstance(entries, dict):
+                entries = entries.get('Status', entries)
+                if isinstance(entries, dict):
+                    entries = [entries]
+            if not isinstance(entries, list) or any(
+                    not isinstance(item, dict) or str(item.get('cardReaderRecvStatus')) != '1' for item in entries):
+                return False
+            if 'totalStatus' in fingerprint and str(fingerprint['totalStatus']) != '1':
+                return False
         if "statusCode" not in status:
             return True
         code = str(status.get("statusCode", "1"))
@@ -157,26 +189,45 @@ class HikvisionClient:
         }
         return body
 
-    def upload_face(self, employee_no: str, image: bytes, filename: str = "face.jpg") -> ApiResult:
-        if not image:
-            raise HikvisionError("The selected face photograph is empty.")
-        metadata = {"faceLibType": "blackFD", "FDID": "1", "FPID": employee_no}
-        files = {
-            "FaceDataRecord": (None, json.dumps(metadata), "application/json"),
-            "FaceImage": (filename, image, "image/jpeg"),
-        }
-        return self._request("POST", "/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json", files=files)
+    def upload_face(self, employee_no: str, image: bytes, filename: str = "face.jpg",
+                    name: str = '', method: str = 'POST', path: str | None = None) -> ApiResult:
+        try:
+            image = prepare_face_jpeg(image)
+        except ValueError as exc:
+            raise HikvisionError(str(exc)) from None
+        metadata = {"faceLibType": "blackFD", "FDID": "1", "FPID": str(employee_no),
+                    "name": name, "saveFacePic": True}
+        path = path or '/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json'
+        result = self._request(method, path, **face_multipart(metadata, image))
+        # Some older terminal web interfaces name the binary form part "img".
+        # Retry only after an explicit format rejection, never on timeout/busy.
+        if format_rejected(result):
+            result = self._request(method, path, **face_multipart(metadata, image, 'img'))
+        return result
 
     def capture_fingerprint(self, finger_no: int = 1) -> CapturedFingerprint:
-        body = {"CaptureFingerPrint": {"fingerNo": finger_no}}
+        if not 1 <= finger_no <= 10:
+            raise HikvisionError('Choose a fingerprint slot between 1 and 10.')
+        body = (f'<?xml version="1.0" encoding="UTF-8"?>'
+                f'<CaptureFingerPrintCond xmlns="http://www.isapi.org/ver20/XMLSchema" version="2.0">'
+                f'<fingerNo>{finger_no}</fingerNo></CaptureFingerPrintCond>').encode()
         result = self._request(
             "POST",
-            "/ISAPI/AccessControl/CaptureFingerPrint?format=json",
-            json=body,
+            "/ISAPI/AccessControl/CaptureFingerPrint",
+            data=body,
+            headers={'Content-Type': 'application/xml; charset=UTF-8',
+                     'Accept': 'application/xml, application/json, multipart/form-data'},
         )
+        if format_rejected(result):
+            result = self._request('POST', '/ISAPI/AccessControl/CaptureFingerPrint?format=json',
+                                   json={'CaptureFingerPrintCond': {'fingerNo': finger_no}})
         if not result.ok:
             return CapturedFingerprint(message=response_message(result))
         capture = result.payload.get("CaptureFingerPrint", result.payload.get("FingerPrintCapture", {}))
+        if not isinstance(capture, dict):
+            return CapturedFingerprint(message='The terminal returned an invalid fingerprint capture response.')
+        if str(capture.get('fingerNo', finger_no)) != str(finger_no):
+            return CapturedFingerprint(message='The terminal returned a different fingerprint slot; nothing was saved.')
         quality = capture.get("fingerPrintQuality", capture.get("quality"))
         try:
             quality = int(quality) if quality is not None else None
@@ -194,6 +245,7 @@ class HikvisionClient:
                 "employeeNo": employee_no,
                 "fingerPrintID": finger_no,
                 "enableCardReader": [1],
+                "checkEmployeeNo": True,
                 "fingerType": "normalFP",
                 "fingerData": finger_data,
             }
