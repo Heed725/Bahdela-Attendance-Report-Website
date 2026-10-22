@@ -102,12 +102,13 @@ class UpangaNameTests(unittest.TestCase):
             self.sites['Other'] = {'employees': {'Shop': {'members': []}}, 'dept_order': ['Shop']}
             source = MagicMock(base_url='http://source.test')
             target = MagicMock(base_url='http://target.test')
-            source.get_user.return_value = self.users[0]
-            target.get_user.side_effect = [None, self.users[0]]
+            live = {**self.users[0], 'numOfCard': 0, 'numOfFP': 0, 'numOfFace': 0}
+            source.get_user.return_value = live
+            target.get_user.side_effect = [None, live, live]
             target._request.return_value = ApiResult(True, 200, {'statusCode': 1})
             pending = prepare_transfer(state, source, target, store, self.users[0], 'Puma Upanga', 'Other', 'Shop', self.sites)
             target.get_user.side_effect = None
-            target.get_user.return_value = self.users[0]
+            target.get_user.return_value = live
             finish_transfer(state, source, target, store, pending, self.sites)
             store.apply(self.sites)
             self.assertNotIn(self.canonical[0], self.site['employees']['Oil']['members'])

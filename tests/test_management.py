@@ -12,7 +12,8 @@ from hikvision import HikvisionClient, HikvisionError, ApiResult
 from roster_store import RosterStore
 
 TEST_HASH = password_hash('test-password', '11' * 16)
-EMPLOYEE = {'employeeNo': '123', 'name': 'Test Person', 'Valid': {'enable': True}, 'doorRight': '1'}
+EMPLOYEE = {'employeeNo': '123', 'name': 'Test Person', 'Valid': {'enable': True}, 'doorRight': '1',
+            'numOfCard': 0, 'numOfFP': 0, 'numOfFace': 0}
 
 
 class LoginTests(unittest.TestCase):
@@ -52,7 +53,7 @@ class OperationsTests(unittest.TestCase):
         self.source = MagicMock(base_url='http://source')
         self.target = MagicMock(base_url='http://target')
         self.source.get_user.return_value = dict(EMPLOYEE)
-        self.target.get_user.side_effect = [None, dict(EMPLOYEE)]
+        self.target.get_user.side_effect = [None, dict(EMPLOYEE), dict(EMPLOYEE)]
         self.target._request.return_value = ApiResult(True, 200, {'statusCode': 1})
 
     def test_all_mutations_require_login(self):
@@ -93,6 +94,9 @@ class OperationsTests(unittest.TestCase):
 
     def test_transfer_in_two_steps_and_roster_persists(self):
         pending = prepare_transfer(self.state, self.source, self.target, self.store, EMPLOYEE, 'A', 'B', 'Shop', sites=self.sites)
+        self.target._request.assert_called_once_with(
+            'POST', '/ISAPI/AccessControl/UserInfo/Record?format=json',
+            json={'UserInfo': {key: value for key, value in EMPLOYEE.items() if not key.startswith('numOf')}})
         self.source.delete_user.assert_not_called()
         self.target.get_user.side_effect = None
         self.target.get_user.return_value = dict(EMPLOYEE)
