@@ -318,9 +318,11 @@ SITES = {
                 "members":["Abdul Timanya Renatus","Ahmed Ally Mpogo","Azihar Mwijage Mzamiru",
                            "Bashiru Said Mgodoka","Iddi Rashidi Abdallah","Issa Sharahbil Siraji",
                            "Juma Othmani Issa","Juma Yahya Bilal","Mohamed Abdallah Hamad",
-                           "Muhsin Oscar Matikila","Shali Sebe Bazo","Wilibald Antigon Urio"],
+                           "Muhsin Oscar Matikila","Shali Sebe Bazo","Wilibald Antigon Urio",
+                           "Haruni Kenedy Saimoni"],
                 "member_ids": {
                     "Juma Yahya Bilal":"9089",
+                    "Haruni Kenedy Saimoni":"1652",
                 },
             },
             "Walinzi": {
@@ -509,7 +511,7 @@ SITES = {
                     "Issa Ally Juma","Zulfa Rashid Mkamba","Yassini Siraji Athumani",
                     "Yahya Mwahimu Abdul","William Joisack Maliselo","Siraji Yassini Siraji",
                     "Mshija Juma Lukuba","Jasmin Warid Idd",
-                    "Hassani Hashimu Mpasule","Haruni Kenedy Saimoni","Haruna Muhamedi Haruna",
+                    "Hassani Hashimu Mpasule","Haruna Muhamedi Haruna",
                     "Hamisi Abdull Siraji","France John Mapunda","Fikirini Rashidi Mussa",
                     "Baraka Raymond Daa","Abuu Jafari Salehe","Abdul Amir Mwishaha",
                     "Abdallah Ally Abdallah","Khalfan Suleiman Ali",

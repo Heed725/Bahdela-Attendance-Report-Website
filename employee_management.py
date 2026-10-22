@@ -137,7 +137,8 @@ def _copy_transfer_credentials(state, source_client, target_client, store, pendi
     if pending.get('existing_destination'):
         _verify_existing_access(live, saved)
     try:
-        destination_manifest = verify_credentials(target_client, saved, credentials)
+        destination_manifest = verify_credentials(target_client, saved, credentials,
+                                                  complete=bool(pending.get('existing_destination')))
     except HikvisionError as exc:
         raise HikvisionError(f'Destination {pending["target"]}: {exc}') from None
     # Reject enrollment changes during the copy; the source must stay intact.
@@ -189,7 +190,8 @@ def finish_transfer(state, source_client, target_client, store, pending, sites=N
     credentials = export_credentials(source_client, live)
     if credentials.manifest() != pending['source_manifest']:
         raise HikvisionError('Source credentials changed. Retry the credential copy before finishing.')
-    destination = verify_credentials(target_client, saved, credentials)
+    destination = verify_credentials(target_client, saved, credentials,
+                                     complete=bool(pending.get('existing_destination')))
     if destination != pending['destination_manifest']:
         raise HikvisionError('Destination credentials changed. Retry the credential copy before finishing.')
     actor = require_permission(state, 'transfer')
@@ -479,7 +481,11 @@ def _render_management(sites, store):
                 finish_transfer(st.session_state, client_for(pending['source'], sites), client_for(pending['target'], sites), store, pending, sites=sites)
                 st.session_state.pop('management_transfer', None)
                 st.session_state.pop('manage_transfer_confirm', None)
-                st.session_state['management_message'] = 'Transfer completed with fingerprints, face photograph and cards. Source employee removed.'
+                counts = pending['credential_counts']
+                st.session_state['management_message'] = (
+                    f"Transfer completed to {pending['target']} / {pending['department']}: "
+                    f"{counts['fingerprints']} fingerprint(s), {counts['faces']} face photograph(s), "
+                    f"{counts['cards']} card(s). Source employee removed.")
                 st.rerun()
             if st.button('Pause transfer (keep both active)'):
                 st.session_state['management_open'] = False

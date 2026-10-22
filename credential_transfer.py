@@ -267,8 +267,8 @@ def copy_credentials(client, user, bundle):
                 'Could not copy the face photograph')
 
 
-def verify_credentials(client, user, expected):
-    actual = export_credentials(client, user, needed=expected.counts())
+def verify_credentials(client, user, expected, complete=False):
+    actual = export_credentials(client, user, needed=None if complete else expected.counts())
     source, destination = expected.manifest(), actual.manifest()
     if source['cards'] != destination['cards'] or source['fingerprints'] != destination['fingerprints']:
         raise HikvisionError('Destination cards or fingerprints could not be verified. Source employee remains active.')

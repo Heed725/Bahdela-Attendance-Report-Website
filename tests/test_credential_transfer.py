@@ -236,6 +236,26 @@ class CredentialTransferTests(unittest.TestCase):
         self.assert_no_destination_writes()
         self.assertEqual(self.store.history(), [])
 
+    def test_existing_extra_credentials_cannot_be_skipped_when_source_has_none(self):
+        original = {key: copy.deepcopy(getattr(self.source, key)) for key in ('cards', 'fingers', 'faces')}
+        for kind in ('cards', 'fingers', 'faces'):
+            with self.subTest(kind=kind):
+                for key, value in original.items():
+                    setattr(self.source, key, copy.deepcopy(value))
+                self.existing_copy()
+                self.source.cards = []
+                self.source.fingers = {}
+                self.source.faces = {}
+                # Retain just one credential category at the destination.
+                for other in ('cards', 'fingers', 'faces'):
+                    if other != kind:
+                        setattr(self.target, other, [] if other == 'cards' else {})
+                with self.assertRaisesRegex(HikvisionError, 'could not be verified'):
+                    self.prepare(reconcile_existing=True)
+                self.assertNotIn('management_transfer', self.state)
+                self.assertIn('201', self.source.users)
+                self.assert_no_destination_writes()
+
     def test_existing_different_access_settings_block_source_removal(self):
         self.existing_copy()
         self.target.users['201']['Valid'] = {'enable': False}
