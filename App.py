@@ -514,7 +514,7 @@ SITES = {
                     "Baraka Raymond Daa","Abuu Jafari Salehe","Abdul Amir Mwishaha",
                     "Abdallah Ally Abdallah","Khalfan Suleiman Ali",
                     "Glory Asajile Mwaipaja","Amiri Siraji Nurdini",
-                    "Albati Donasiani Kitali",
+                    "Albati Donasiani Kitali","Hatibu Omari",
                 ],
                 "member_ids": {
                     "Khalfan Suleiman Ali":"4011",
@@ -522,6 +522,7 @@ SITES = {
                     "Amiri Siraji Nurdini":"7012",
                     "Issa Ally Juma":"7013",
                     "Albati Donasiani Kitali":"7014",
+                    "Hatibu Omari":"204",
                 },
             },
             "Cleaning": {
@@ -529,7 +530,11 @@ SITES = {
                 "header_hex":"2E6B3E",
                 "members":[
                     "Shabani Jafari Sobo","Saumu Omary Mwalimu","Makenya Juma Makenya",
+                    "Ithinain Yusuf Mpondi",
                 ],
+                "member_ids": {
+                    "Ithinain Yusuf Mpondi":"203",
+                },
             },
             "Supervisors": {
                 "label":"SUPERVISORS / MANAGEMENT", "shift":"Shift: 08:00 - 17:00",
