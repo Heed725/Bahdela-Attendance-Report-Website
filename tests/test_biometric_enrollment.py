@@ -43,6 +43,8 @@ class BiometricProtocolTests(unittest.TestCase):
     def setUp(self):
         self.client = HikvisionClient('http://terminal.test', 'test', 'test')
         self.client.session.request = MagicMock()
+        self.client.capture_profile = MagicMock(return_value={
+            'namespace': 'http://www.isapi.org/ver20/XMLSchema', 'version': '2.0', 'available': True})
 
     def test_capture_sends_xml_condition_to_xml_endpoint_and_decodes_result(self):
         def terminal(method, url, **kwargs):
@@ -160,6 +162,56 @@ class BiometricProtocolTests(unittest.TestCase):
 
     def test_xml_entities_are_not_expanded(self):
         self.assertEqual(decode_document(b'<!DOCTYPE a [<!ENTITY x "secret">]><a>&x;</a>'), {})
+
+    def test_capture_uses_namespace_advertised_by_older_terminal(self):
+        self.client.capture_profile = HikvisionClient.capture_profile.__get__(self.client)
+        capability = (b'<CaptureFingerPrint xmlns="http://www.hikvision.com/ver20/XMLSchema" version="1.0">'
+                      b'<CaptureFingerPrintCond><fingerNo min="1" max="10">1</fingerNo>'
+                      b'</CaptureFingerPrintCond></CaptureFingerPrint>')
+        self.client.session.request.side_effect = [reply(raw=capability, content_type='application/xml'),
+                                                  reply(raw=CAPTURE, content_type='application/xml')]
+        self.assertTrue(self.client.capture_fingerprint().data)
+        request = self.client.session.request.call_args
+        root = ET.fromstring(request.kwargs['data'])
+        self.assertEqual(root.tag, '{http://www.hikvision.com/ver20/XMLSchema}CaptureFingerPrintCond')
+        self.assertEqual(root.attrib['version'], '1.0')
+        self.assertEqual(request.kwargs['headers']['Connection'], 'close')
+
+    def test_unauthorized_capabilities_stop_capture(self):
+        self.client.capture_profile = HikvisionClient.capture_profile.__get__(self.client)
+        self.client.session.request.return_value = reply({'statusCode': 4}, status=401)
+        capture = self.client.capture_fingerprint()
+        self.assertFalse(capture.data)
+        self.assertIn('denied access', capture.message)
+        self.client.session.request.assert_called_once()
+
+    def test_diagnostics_excludes_private_device_fields_and_does_not_capture(self):
+        self.client.capture_profile = HikvisionClient.capture_profile.__get__(self.client)
+        self.client.session.request.side_effect = [
+            reply({'DeviceInfo': {'model': 'Example Model', 'firmwareVersion': 'V1.0',
+                                   'serialNumber': 'private-serial', 'password': 'private-password'}}),
+            reply({'AccessControl': {'isSupportCaptureFingerPrint': False}}),
+            xml_error('notSupport')]
+        report = self.client.terminal_diagnostics()
+        self.assertEqual(report['Device']['model'], 'Example Model')
+        self.assertFalse(report['Access control']['isSupportCaptureFingerPrint'])
+        self.assertNotIn('private', json.dumps(report))
+        self.assertTrue(all(call.args[0] == 'GET' for call in self.client.session.request.call_args_list))
+
+    def test_capture_rejection_reports_both_formats(self):
+        self.client.session.request.return_value = xml_error()
+        capture = self.client.capture_fingerprint()
+        self.assertIn('XML capture: Invalid Content: badXmlContent', capture.message)
+        self.assertIn('JSON capture: Invalid Content: badXmlContent', capture.message)
+
+    def test_face_request_closes_connection_and_disconnect_is_not_retried(self):
+        def terminal(method, url, **kwargs):
+            self.assertEqual(kwargs['headers']['Connection'], 'close')
+            raise requests.ConnectionError('remote closed')
+        self.client.session.request.side_effect = terminal
+        with self.assertRaises(HikvisionError):
+            self.client.upload_face('301', photo(), name='Test Employee')
+        self.client.session.request.assert_called_once()
 
     def test_ui_never_reports_saved_fingerprint_without_readback(self):
         import time

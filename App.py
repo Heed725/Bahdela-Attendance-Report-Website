@@ -5,6 +5,8 @@ Run with:  python App.py   OR   streamlit run App.py
 """
 
 import streamlit as st
+from streamlit.runtime.scriptrunner import get_script_run_ctx
+from biometric_protocol import ENROLLMENT_RELEASE
 from employee_management import roster_store, render_login, render_management, report_site_for
 from hikvision import HikvisionError
 from report_roster import current_report_events
@@ -77,12 +79,12 @@ def local_now():
 # ── AUTO-LAUNCH ────────────────────────────────────────────────
 # Only relaunch if we were NOT already started by streamlit.
 # The sentinel env var _APP_LAUNCHED prevents recursive relaunching.
-if os.environ.get("_APP_LAUNCHED") != "1":
+if get_script_run_ctx(suppress_warning=True) is None and os.environ.get("_APP_LAUNCHED") != "1":
     os.environ["_APP_LAUNCHED"] = "1"
     script = os.path.abspath(__file__)
     env = {**os.environ, "_APP_LAUNCHED": "1"}
     sys.exit(subprocess.call(
-        ["streamlit", "run", script, "--server.headless", "false"],
+        [sys.executable, "-m", "streamlit", "run", script, "--server.headless", "true"],
         shell=(sys.platform == "win32"), env=env))
 
 # ── PAGE CONFIG ───────────────────────────────────────────────
@@ -2265,4 +2267,4 @@ if generate_report or with_lunch:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 st.markdown("---")
-st.markdown(f"<small style='color:{MUTED}'>{site_cfg['label']} Shift Report System</small>",unsafe_allow_html=True)
+st.markdown(f"<small style='color:{MUTED}'>{site_cfg['label']} Shift Report System · Version {ENROLLMENT_RELEASE}</small>",unsafe_allow_html=True)

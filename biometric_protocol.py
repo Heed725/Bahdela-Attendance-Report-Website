@@ -8,6 +8,8 @@ from email.parser import BytesParser
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+ENROLLMENT_RELEASE = '2026.10.22.3'
+
 
 def decode_payload(response):
     """Read JSON, namespaced XML, or the metadata part of multipart replies."""

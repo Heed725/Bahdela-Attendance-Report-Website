@@ -14,7 +14,7 @@ from roster_store import RosterStore, normalized, configured_names
 from report_roster import current_report_roster
 from credential_transfer import (export_credentials, ensure_cards_available,
                                  copy_credentials, verify_credentials, Credentials, read_fingerprints)
-from biometric_protocol import prepare_face_jpeg
+from biometric_protocol import prepare_face_jpeg, ENROLLMENT_RELEASE
 
 
 def secrets_dict():
@@ -346,6 +346,13 @@ def render_delete_list(site, sites, store):
 
 def enroll_employee(employee, site, sites, key):
     st.caption(f"Biometrics: {employee['name']} · {employee['employeeNo']} · {site}")
+    if st.button('Check terminal compatibility', key=key + '_check'):
+        require_permission(st.session_state, 'list')
+        with st.spinner('Reading terminal model and supported enrollment options…'):
+            st.session_state[key + '_compatibility'] = client_for(site, sites).terminal_diagnostics()
+    if key + '_compatibility' in st.session_state:
+        with st.expander('Terminal compatibility', expanded=True):
+            st.json(st.session_state[key + '_compatibility'])
     photo = st.file_uploader('Face photograph (JPEG)', type=['jpg', 'jpeg'], key=key + '_photo')
     st.caption('Use a clear, front-facing JPEG up to 20 MB. Large photographs are resized automatically for the terminal.')
     if st.button('Save face at this location', disabled=photo is None, key=key + '_face'):
@@ -381,6 +388,7 @@ def render_management(sites, store):
     if not active_account(st.session_state) or not st.session_state.get('management_open'):
         return
     with st.expander('Employee management', expanded=True):
+        st.caption('Enrollment update: ' + ENROLLMENT_RELEASE)
         st.caption('Add, delete or transfer employees on the selected Hikvision terminal and in the report roster.')
         try:
             _render_management(sites, store)

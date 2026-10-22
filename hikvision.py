@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import uuid
+import xml.etree.ElementTree as ET
+from xml.sax.saxutils import quoteattr
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
@@ -86,12 +88,12 @@ class HikvisionClient:
         self.session.headers.update({"Accept": "application/json"})
 
     def _send(self, method: str, path: str, **kwargs: Any) -> Response:
+        kwargs.setdefault('timeout', self.timeout)
+        kwargs.setdefault('verify', self.verify_tls)
         try:
             response = self.session.request(
                 method,
                 f"{self.base_url}{path}",
-                timeout=self.timeout,
-                verify=self.verify_tls,
                 **kwargs,
             )
         except requests.Timeout as exc:
@@ -198,31 +200,96 @@ class HikvisionClient:
         metadata = {"faceLibType": "blackFD", "FDID": "1", "FPID": str(employee_no),
                     "name": name, "saveFacePic": True}
         path = path or '/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json'
-        result = self._request(method, path, **face_multipart(metadata, image))
+        request = face_multipart(metadata, image)
+        request['headers']['Connection'] = 'close'
+        result = self._request(method, path, **request)
         # Some older terminal web interfaces name the binary form part "img".
         # Retry only after an explicit format rejection, never on timeout/busy.
         if format_rejected(result):
-            result = self._request(method, path, **face_multipart(metadata, image, 'img'))
+            request = face_multipart(metadata, image, 'img')
+            request['headers']['Connection'] = 'close'
+            result = self._request(method, path, **request)
         return result
+
+    def capture_profile(self):
+        """Read the station's own namespace/version; never trigger capture here."""
+        result = self._request('GET', '/ISAPI/AccessControl/CaptureFingerPrint/capabilities', timeout=(5, 10))
+        if result.status_code in (401, 403):
+            raise HikvisionError('The terminal denied access to fingerprint capabilities. Check this station’s connection account.')
+        profile = {'namespace': 'http://www.isapi.org/ver20/XMLSchema', 'version': '2.0',
+                   'available': result.ok, 'status': response_message(result) if not result.ok else 'Available'}
+        if result.ok and '<!DOCTYPE' not in result.text.upper():
+            try:
+                root = ET.fromstring(result.text)
+                if root.tag.rsplit('}', 1)[-1] == 'CaptureFingerPrint':
+                    profile['namespace'] = root.tag[1:].split('}', 1)[0] if root.tag.startswith('{') else ''
+                    profile['version'] = root.attrib.get('version', '2.0')
+                    for node in root.iter():
+                        if node.tag.rsplit('}', 1)[-1] == 'fingerNo':
+                            profile['finger_min'] = node.attrib.get('min', '1')
+                            profile['finger_max'] = node.attrib.get('max', '10')
+                            break
+            except ET.ParseError:
+                pass
+        return profile
+
+    def terminal_diagnostics(self):
+        """A small, read-only support report without secrets or employee data."""
+        report = {}
+        for label, path in (('Device', '/ISAPI/System/deviceInfo'),
+                            ('Access control', '/ISAPI/AccessControl/capabilities')):
+            try:
+                result = self._request('GET', path, timeout=(5, 10))
+                safe = {'HTTP': result.status_code}
+                if result.ok:
+                    def visit(value):
+                        if not isinstance(value, dict):
+                            return
+                        for key, item in value.items():
+                            if key in ('model', 'firmwareVersion', 'isSupportCaptureFingerPrint',
+                                       'isSupportFingerPrintCfg', 'isSupportFace') and not isinstance(item, (dict, list)):
+                                safe[key] = item
+                            elif isinstance(item, dict):
+                                visit(item)
+                    visit(result.payload)
+                else:
+                    safe['status'] = response_message(result)
+                report[label] = safe
+            except HikvisionError:
+                report[label] = {'status': 'Could not connect for this read-only check.'}
+        try:
+            report['Fingerprint capture'] = self.capture_profile()
+        except HikvisionError as exc:
+            report['Fingerprint capture'] = {'status': str(exc)}
+        return report
 
     def capture_fingerprint(self, finger_no: int = 1) -> CapturedFingerprint:
         if not 1 <= finger_no <= 10:
             raise HikvisionError('Choose a fingerprint slot between 1 and 10.')
-        body = (f'<?xml version="1.0" encoding="UTF-8"?>'
-                f'<CaptureFingerPrintCond xmlns="http://www.isapi.org/ver20/XMLSchema" version="2.0">'
+        try:
+            profile = self.capture_profile()
+        except HikvisionError as exc:
+            return CapturedFingerprint(message=str(exc))
+        # Use the namespace/version actually advertised by this terminal.
+        namespace = ' xmlns=' + quoteattr(profile['namespace']) if profile['namespace'] else ''
+        body = ('<?xml version="1.0" encoding="UTF-8"?>'
+                '<CaptureFingerPrintCond' + namespace + ' version=' + quoteattr(profile['version']) + '>'
                 f'<fingerNo>{finger_no}</fingerNo></CaptureFingerPrintCond>').encode()
         result = self._request(
             "POST",
             "/ISAPI/AccessControl/CaptureFingerPrint",
             data=body,
             headers={'Content-Type': 'application/xml; charset=UTF-8',
-                     'Accept': 'application/xml, application/json, multipart/form-data'},
+                     'Accept': 'application/xml, application/json, multipart/form-data', 'Connection': 'close'},
         )
+        attempts = ['XML capture: ' + (response_message(result) if not result.ok else 'Accepted')]
         if format_rejected(result):
             result = self._request('POST', '/ISAPI/AccessControl/CaptureFingerPrint?format=json',
-                                   json={'CaptureFingerPrintCond': {'fingerNo': finger_no}})
+                                   json={'CaptureFingerPrintCond': {'fingerNo': finger_no}},
+                                   headers={'Connection': 'close'})
+            attempts.append('JSON capture: ' + (response_message(result) if not result.ok else 'Accepted'))
         if not result.ok:
-            return CapturedFingerprint(message=response_message(result))
+            return CapturedFingerprint(message='; '.join(attempts) + '. Use Check terminal compatibility for this station.')
         capture = result.payload.get("CaptureFingerPrint", result.payload.get("FingerPrintCapture", {}))
         if not isinstance(capture, dict):
             return CapturedFingerprint(message='The terminal returned an invalid fingerprint capture response.')
