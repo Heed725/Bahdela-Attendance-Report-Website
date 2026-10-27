@@ -319,14 +319,10 @@ SITES = {
                            "Bashiru Said Mgodoka","Iddi Rashidi Abdallah","Issa Sharahbil Siraji",
                            "Juma Othmani Issa","Juma Yahya Bilal","Mohamed Abdallah Hamad",
                            "Muhsin Oscar Matikila","Shali Sebe Bazo","Wilibald Antigon Urio",
-                           "Haruni Kenedy Saimoni","Jasmin Warid Idd",
-                           "Mohamed Kombo Mwinyikambi","Haruna Muhamedi Haruna"],
+                           "Haruni Kenedy Saimoni"],
                 "member_ids": {
                     "Juma Yahya Bilal":"9089",
                     "Haruni Kenedy Saimoni":"1652",
-                    "Jasmin Warid Idd":"1653",
-                    "Mohamed Kombo Mwinyikambi":"1651",
-                    "Haruna Muhamedi Haruna":"1633",
                 },
             },
             "Walinzi": {
@@ -378,7 +374,9 @@ SITES = {
                     "Ramadhani Abdallah Ally","Hassani Muhidini Masenga",
                     "Rashidi Majau Masai","Ramadhan Mohamed Yusuph",
                     "Rajabu Ijumaa Hizza","Nesha Habib Losiri","Msabaha Ally Msabaha",
+                    "Haruna Muhamedi Haruna",
                 ],
+                "member_ids": {"Haruna Muhamedi Haruna":"1633"},
                 "member_aliases": {
                     "Athumani Yusuph Sheby": ["Athumani Y Shebly"],
                     "Hamlati Shaibu Ghindu": ["Hamlat S ghindu"],
@@ -521,6 +519,7 @@ SITES = {
                     "Abdallah Ally Abdallah","Khalfan Suleiman Ali",
                     "Glory Asajile Mwaipaja","Amiri Siraji Nurdini",
                     "Albati Donasiani Kitali","Hatibu Omari",
+                    "Jasmin Warid Idd",
                 ],
                 "member_ids": {
                     "Khalfan Suleiman Ali":"4011",
@@ -529,6 +528,7 @@ SITES = {
                     "Issa Ally Juma":"7013",
                     "Albati Donasiani Kitali":"7014",
                     "Hatibu Omari":"204",
+                    "Jasmin Warid Idd":"1653",
                 },
             },
             "Cleaning": {
@@ -671,6 +671,7 @@ SITES = {
                     "Ally Malozo",
                     "Ally Hassan Ally",
                     "Abdulkarim Abdallah Kilindo",
+                    "Mohamed Kombo Mwinyikambi",
                 ],
                 "member_ids": {
                     "Idd Adnan Idd":"5018",
@@ -689,6 +690,7 @@ SITES = {
                     "Ally Malozo":"5005",
                     "Ally Hassan Ally":"5004",
                     "Abdulkarim Abdallah Kilindo":"5003",
+                    "Mohamed Kombo Mwinyikambi":"1651",
                 },
             },
             "Oil Supervisor": {
