@@ -68,6 +68,9 @@ def render_all_stations(sites, start_date, end_date, tag, generate, client_facto
     active, skipped = snapshot['active'], snapshot['skipped']
     if skipped:
         st.warning('Skipped unavailable stations: ' + ', '.join(skipped))
+        with st.expander('Station connection details'):
+            for name, reason in skipped.items():
+                st.write(name + ': ' + reason)
     if not active:
         st.error('No stations could be read. No attendance or absentee report was generated.')
         return
