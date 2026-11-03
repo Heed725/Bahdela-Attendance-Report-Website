@@ -418,6 +418,42 @@ def enroll_employee(employee, site, sites, key):
         st.success('Fingerprint saved at ' + site)
 
 
+def render_existing_enrollment(sites):
+    st.write('Add a face photograph or fingerprint to an existing employee at their current station.')
+    site = st.selectbox('Enrollment station *', list(sites), index=None, key='manage_enroll_site')
+    if not site:
+        return
+    key = 'manage_enroll_existing_' + site
+    if st.button('Load / refresh terminal employees', key=key + '_refresh'):
+        require_permission(st.session_state, 'list')
+        with st.spinner('Loading employees from ' + site + '…'):
+            users = client_for(site, sites).search_users()
+        # Enrollment is independent of the report roster. Keep only the fields
+        # required to select a person and show their enrollment status.
+        fields = ('employeeNo', 'name', 'numOfFP', 'numOfFace', 'numOfCard')
+        st.session_state[key + '_users'] = [
+            {field: user[field] for field in fields if field in user} for user in users]
+    users = st.session_state.get(key + '_users')
+    if users is None:
+        st.info('Load the station’s employees, then select the person to enroll.')
+        return
+    if not users:
+        st.info('No employees were found on this terminal.')
+        return
+    users_by_id = {str(user['employeeNo']): user for user in users}
+    employee_id = st.selectbox('Employee to enroll *',
+        sorted(users_by_id, key=lambda uid: (normalized(users_by_id[uid].get('name', '')), uid)),
+        index=None, key=key + '_employee',
+        format_func=lambda uid: f"{users_by_id[uid].get('name', '')} · ID {uid}")
+    if employee_id is None:
+        return
+    employee = users_by_id[employee_id]
+    st.caption(f"Currently enrolled: {employee.get('numOfFP', 'Not reported')} fingerprint(s), "
+               f"{employee.get('numOfFace', 'Not reported')} face photograph(s), "
+               f"{employee.get('numOfCard', 'Not reported')} card(s). Refresh after saving to update these counts.")
+    enroll_employee(employee, site, sites, key + '_' + employee_id)
+
+
 def render_management(sites, store):
     if not active_account(st.session_state) or not st.session_state.get('management_open'):
         return
@@ -460,8 +496,11 @@ def _render_management(sites, store):
                     st.caption(message)
                 else:
                     st.warning(message)
-    add_tab, transfer_tab, delete_tab, history_tab = st.tabs(['Add employee', 'Transfer employee', 'Delete employee', 'History'])
+    add_tab, enroll_tab, transfer_tab, delete_tab, history_tab = st.tabs([
+        'Add employee', 'Face / fingerprint', 'Transfer employee', 'Delete employee', 'History'])
     names = list(sites)
+    with enroll_tab:
+        render_existing_enrollment(sites)
     with add_tab:
         site = st.selectbox('Where should this person be placed? *', names, index=None, key='manage_add_site')
         if site:

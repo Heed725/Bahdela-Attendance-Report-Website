@@ -32,6 +32,30 @@ class FakeTerminal:
 
 
 class InterfaceTests(unittest.TestCase):
+    def test_existing_employee_enrollment_without_adding_or_roster_membership(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'_APP_LAUNCHED': '1', 'ROSTER_DB_PATH': folder+'/roster.db'}):
+            terminal = FakeTerminal('http://fake.test')
+            terminal.users = {'1652': {'employeeNo': '1652', 'name': 'Existing Unrostered Person',
+                                      'numOfFP': 0, 'numOfFace': 0, 'numOfCard': 0}}
+            with patch('employee_management.client_for', return_value=terminal), \
+                    patch.object(terminal, 'create_user', wraps=terminal.create_user) as create, \
+                    patch('employee_management.enroll_employee') as enroll:
+                at = AppTest.from_file(str(Path(__file__).parents[1] / 'App.py'), default_timeout=30)
+                at.session_state['management_account'] = 'HR'
+                at.session_state['management_last_seen'] = time.time()
+                at.session_state['management_open'] = True
+                at.run()
+                self.assertIn('Face / fingerprint', [tab.label for tab in at.tabs])
+                at.selectbox(key='manage_enroll_site').select('Puma Ocean Road').run()
+                self.assertFalse(enroll.called)
+                at.button(key='manage_enroll_existing_Puma Ocean Road_refresh').click().run()
+                at.selectbox(key='manage_enroll_existing_Puma Ocean Road_employee').select('1652').run()
+                self.assertFalse(at.exception)
+                self.assertEqual(enroll.call_args.args[0]['employeeNo'], '1652')
+                self.assertEqual(enroll.call_args.args[1], 'Puma Ocean Road')
+                self.assertNotIn('manage_enroll_existing_Buguruni_users', at.session_state)
+                create.assert_not_called()
+
     def test_terminal_compatibility_check_needs_no_new_employee(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'_APP_LAUNCHED': '1', 'ROSTER_DB_PATH': folder+'/roster.db'}):
             terminal = FakeTerminal('http://fake.test')
@@ -209,7 +233,7 @@ class InterfaceTests(unittest.TestCase):
                 at.session_state['management_open'] = True
                 at.run()
                 self.assertFalse(at.exception)
-                self.assertEqual(len(at.tabs), 4)
+                self.assertEqual(len(at.tabs), 5)
                 at.selectbox(key='manage_add_site').select('Buguruni').run()
                 at.selectbox(key='manage_add_department_Buguruni').select('Shop').run()
                 at.selectbox(key='manage_add_job_Buguruni_Shop').select('SHOP')
