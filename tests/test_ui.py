@@ -47,13 +47,20 @@ class InterfaceTests(unittest.TestCase):
                 response = type('Response', (), {'status_code': 200, 'json': lambda self: {
                     'AcsEvent': {'InfoList': events, 'totalMatches': 1, 'numOfMatches': 1}}})()
                 with patch('employee_management.client_for', return_value=terminal), \
-                        patch('requests.post', return_value=response), \
+                        patch('requests.post', return_value=response) as fetch, \
                         patch('streamlit.download_button', return_value=False) as downloads:
                     at = AppTest.from_file(str(Path(__file__).parents[1] / 'App.py'), default_timeout=30).run()
-                    at.selectbox(key='attendance_report_type').select(mode).run()
+                    self.assertNotIn('attendance_report_type', [box.key for box in at.selectbox])
                     next(b for b in at.button if b.label == 'View / Generate Reports').click().run()
+                    before_filter_requests = fetch.call_count
+                    downloads.reset_mock()
+                    at.selectbox(key='attendance_report_type').select(mode).run()
                     self.assertFalse(at.exception)
                     self.assertFalse(at.error)
+                    self.assertEqual(fetch.call_count, before_filter_requests)
+                    options_index = next(i for i, item in enumerate(at.main) if item.type == 'markdown' and item.value == '### Report Options')
+                    selector_index = next(i for i, item in enumerate(at.main) if item.type == 'selectbox' and item.key == 'attendance_report_type')
+                    self.assertLess(options_index, selector_index)
                     rendered = ' '.join(frame.value.to_string() for frame in at.dataframe)
                     self.assertIn(expected_name, rendered)
                     self.assertNotIn(excluded_name, rendered)
@@ -61,6 +68,10 @@ class InterfaceTests(unittest.TestCase):
                     self.assertEqual([tab.label for tab in at.tabs], ['Download Reports', 'View Reports'])
                     for call in downloads.call_args_list:
                         self.assertIn(mode.replace(' ', '_'), call.kwargs['file_name'])
+                    at.radio(key='site_selector_row').set_value('Puma Ocean Road').run()
+                    self.assertNotIn('attendance_report_type', [box.key for box in at.selectbox])
+                    self.assertFalse(at.dataframe)
+                    self.assertEqual(fetch.call_count, before_filter_requests)
 
     def test_existing_employee_enrollment_without_adding_or_roster_membership(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'_APP_LAUNCHED': '1', 'ROSTER_DB_PATH': folder+'/roster.db'}):

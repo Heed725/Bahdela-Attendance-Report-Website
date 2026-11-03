@@ -1992,11 +1992,6 @@ st.markdown(f"<small style='color:{MUTED}'>{num_days} day(s) selected — <b>{pe
 st.markdown("---")
 
 # ── Generate ──────────────────────────────────────────────────
-attendance_report_type = st.selectbox('Attendance report type', REPORT_TYPES, key='attendance_report_type')
-if attendance_report_type in REPORT_NOTES:
-    st.caption(REPORT_NOTES[attendance_report_type])
-    if st.session_state.selected_site == 'Buguruni':
-        st.caption('This selection applies to View / Generate Reports. The lunch-time report uses its own four-clockings format.')
 with_lunch = False
 if st.session_state.selected_site == "Buguruni":
     regular_button, lunch_button = st.columns(2)
@@ -2007,7 +2002,13 @@ if st.session_state.selected_site == "Buguruni":
 else:
     generate_report = st.button("View / Generate Reports")
 
+report_scope = (st.session_state.selected_site, start_date.isoformat(), end_date.isoformat(),
+                repr(SITES[st.session_state.selected_site]['employees']))
+if with_lunch or st.session_state.get('attendance_report_scope') != report_scope:
+    st.session_state.pop('attendance_report_snapshot', None)
+
 if generate_report or with_lunch:
+    st.session_state.pop('attendance_report_snapshot', None)
     progress=st.progress(0.0); status=st.empty()
 
     def upd(val,msg): progress.progress(val); status.info(msg)
@@ -2070,14 +2071,71 @@ if generate_report or with_lunch:
         if mobile_department not in DEPT_ORDER:
             DEPT_ORDER.append(mobile_department)
 
+    rows_by_date=defaultdict(list)
+    for r in rows: rows_by_date[r["date"]].append(r)
+
+    # Retain this generated report for filter changes; never store connection credentials.
+    st.session_state['attendance_report_scope'] = report_scope
+    st.session_state['attendance_report_snapshot'] = {
+        'employees': ALL_EMPLOYEES, 'department_order': list(DEPT_ORDER),
+        'department_colors': DEPT_COLORS, 'rows': rows, 'rows_by_date': rows_by_date,
+        'location_failures': location_failures, 'generated_at': local_now().strftime('%d %b %Y, %H:%M'),
+    }
+
+report_snapshot = st.session_state.get('attendance_report_snapshot')
+if report_snapshot:
+    ALL_EMPLOYEES = report_snapshot['employees']
+    DEPT_ORDER = report_snapshot['department_order']
+    DEPT_COLORS = report_snapshot['department_colors']
+    rows = report_snapshot['rows']
+    rows_by_date = report_snapshot['rows_by_date']
+    location_failures = report_snapshot['location_failures']
+    if not generate_report:
+        progress = st.progress(0.65)
+        status = st.empty()
     if location_failures:
         st.warning(
             "Management movement could not be checked at: "
             + ", ".join(sorted(location_failures))
             + ". The selected site's main report is still available."
         )
-    rows_by_date=defaultdict(list)
-    for r in rows: rows_by_date[r["date"]].append(r)
+
+    if st.session_state.get('attendance_report_type', 'Full Attendance') == 'Full Attendance':
+        # ── Summary cards ─────────────────────────────────────────
+        progress.progress(0.65)
+        total_present=len(rows)
+        all_members=sum(len(ALL_EMPLOYEES[dk]["members"]) for dk in DEPT_ORDER)
+        st.markdown("### Summary")
+        m1,m2,m3,m4,m5=st.columns(5)
+        m1.metric("Days", num_days)
+        m2.metric("Total Records", total_present)
+        m3.metric("Staff Roster", all_members)
+        m4.metric("Avg / Day", total_present//max(num_days,1))
+        unique_staff=len(set(r["name"] for r in rows))
+        m5.metric("Unique Staff", unique_staff)
+
+        # ── Per-dept breakdown (last day or whole range) ───────────
+        last_rows=rows_by_date.get(end_date.strftime("%Y-%m-%d"),[])
+        dept_data_last=build_dept_data(last_rows)
+        st.markdown(f"**Department breakdown — {end_date.strftime('%d %B %Y')}**")
+        department_cards = ["<div class='department-grid'>"]
+        for dk in DEPT_ORDER:
+            pd_=dept_data_last[dk]
+            department_cards.append(
+                f"<div class='department-card' style='background:{DEPT_COLORS[dk]}'>"
+                f"<div style='color:#FFF3CD;font-weight:bold;font-size:11px'>{ALL_EMPLOYEES[dk]['label']}</div>"
+                f"<div style='color:#FFFFFF;font-size:22px;font-weight:bold'>{len(pd_['present'])}</div>"
+                f"<div style='color:#F2E7D5;font-size:10px'>of {len(pd_['present'])+len(pd_['absent'])}</div>"
+                f"</div>"
+            )
+        department_cards.append("</div>")
+        st.markdown("".join(department_cards),unsafe_allow_html=True)
+
+    st.markdown('### Report Options')
+    st.caption('Generated ' + report_snapshot['generated_at'] + ' (Tanzania time). Use View / Generate Reports to refresh attendance.')
+    attendance_report_type = st.selectbox('Attendance report type', REPORT_TYPES, key='attendance_report_type')
+    if attendance_report_type in REPORT_NOTES:
+        st.caption(REPORT_NOTES[attendance_report_type])
 
     if attendance_report_type != 'Full Attendance':
         attendance_days = []
@@ -2093,36 +2151,6 @@ if generate_report or with_lunch:
         progress.progress(1.0)
         status.success(attendance_report_type + ' reports ready!')
         st.stop()
-
-    # ── Summary cards ─────────────────────────────────────────
-    progress.progress(0.65)
-    total_present=len(rows)
-    all_members=sum(len(ALL_EMPLOYEES[dk]["members"]) for dk in DEPT_ORDER)
-    st.markdown("### Summary")
-    m1,m2,m3,m4,m5=st.columns(5)
-    m1.metric("Days", num_days)
-    m2.metric("Total Records", total_present)
-    m3.metric("Staff Roster", all_members)
-    m4.metric("Avg / Day", total_present//max(num_days,1))
-    unique_staff=len(set(r["name"] for r in rows))
-    m5.metric("Unique Staff", unique_staff)
-
-    # ── Per-dept breakdown (last day or whole range) ───────────
-    last_rows=rows_by_date.get(end_date.strftime("%Y-%m-%d"),[])
-    dept_data_last=build_dept_data(last_rows)
-    st.markdown(f"**Department breakdown — {end_date.strftime('%d %B %Y')}**")
-    department_cards = ["<div class='department-grid'>"]
-    for dk in DEPT_ORDER:
-        pd_=dept_data_last[dk]
-        department_cards.append(
-            f"<div class='department-card' style='background:{DEPT_COLORS[dk]}'>"
-            f"<div style='color:#FFF3CD;font-weight:bold;font-size:11px'>{ALL_EMPLOYEES[dk]['label']}</div>"
-            f"<div style='color:#FFFFFF;font-size:22px;font-weight:bold'>{len(pd_['present'])}</div>"
-            f"<div style='color:#F2E7D5;font-size:10px'>of {len(pd_['present'])+len(pd_['absent'])}</div>"
-            f"</div>"
-        )
-    department_cards.append("</div>")
-    st.markdown("".join(department_cards),unsafe_allow_html=True)
 
     # ── Build files ───────────────────────────────────────────
     summary,total_days_n=build_summary(rows_by_date,start_date,end_date)
@@ -2146,7 +2174,6 @@ if generate_report or with_lunch:
     progress.progress(1.0); status.success("Reports ready!")
 
     # ── Viewer and downloads ──────────────────────────────────
-    st.markdown("### Report Options")
     st.caption(
         "Download Reports opens by default. Select View Reports to preview "
         "the generated report directly on screen."
