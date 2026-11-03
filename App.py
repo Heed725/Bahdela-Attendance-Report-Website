@@ -7,11 +7,12 @@ Run with:  python App.py   OR   streamlit run App.py
 import streamlit as st
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 from biometric_protocol import ENROLLMENT_RELEASE
-from employee_management import roster_store, render_login, render_management, report_site_for
+from employee_management import roster_store, render_login, render_management, report_site_for, client_for
 from hikvision import HikvisionError
 from report_roster import current_report_events
 from lunch_reports import render_lunch_report
 from attendance_reports import REPORT_TYPES, REPORT_NOTES, subset_tables, render_subset_report
+from all_station_reports import ALL_STATIONS, render_all_stations
 import requests
 import pandas as pd
 from requests.auth import HTTPDigestAuth
@@ -1886,13 +1887,55 @@ def build_xlsx_summary(summary,total_days,start_date,end_date,label,site="Buguru
 # ── STREAMLIT UI ─────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════
 
+def all_station_tables(active, mode):
+    """Apply each station's own roster and shifts before combining report rows."""
+    global ALL_EMPLOYEES, DEPT_ORDER, DEPT_COLORS
+    original = ALL_EMPLOYEES, DEPT_ORDER, DEPT_COLORS
+    manager_events = [event for name, data in active.items()
+                      for event in tag_events_with_site(data['events'], name)
+                      if is_mobile_manager_event(event)]
+    result = {}
+    try:
+        for name, data in active.items():
+            roster = data['roster']
+            ALL_EMPLOYEES, DEPT_COLORS = roster['employees'], roster['dept_colors']
+            DEPT_ORDER = [key for key in roster['dept_order'] if not ALL_EMPLOYEES[key].get('visitor_only')]
+            events = [event for event in tag_events_with_site(data['events'], name)
+                      if not is_mobile_manager_event(event)] + manager_events
+            events = current_report_events(events, roster, MOBILE_MANAGER_NAME)
+            rows = [row for row in parse_by_day(events, start_date, end_date)
+                    if not same_employee_name(row.get('name'), MOBILE_MANAGER_NAME)
+                    or name in row.get('visited_sites', [])]
+            if any(same_employee_name(row['name'], MOBILE_MANAGER_NAME) for row in rows):
+                manager_department = (MOBILE_MANAGER_HOME_DEPT if name == MOBILE_MANAGER_HOME_SITE
+                                      else MOBILE_MANAGER_KIBAHA_DEPT if name == MOBILE_MANAGER_KIBAHA_SITE
+                                      else MOBILE_MANAGER_VISITOR_DEPT)
+                if manager_department not in DEPT_ORDER:
+                    DEPT_ORDER.append(manager_department)
+            rows_by_day = defaultdict(list)
+            for row in rows:
+                rows_by_day[row['date']].append(row)
+            days, day = [], start_date
+            while day <= end_date:
+                days.append((day, build_dept_data(rows_by_day.get(day.isoformat(), []))))
+                day += timedelta(days=1)
+            result[name] = subset_tables(days, ALL_EMPLOYEES, mode,
+                lambda department, arrival: get_shift_window(department, arrival)[0],
+                get_configured_employee_id)
+    finally:
+        ALL_EMPLOYEES, DEPT_ORDER, DEPT_COLORS = original
+    return result
+
+
 # ── Persist selected site across reruns ───────────────────────
-site_names = list(SITES.keys())
+site_names = [*SITES, ALL_STATIONS]
 if "selected_site" not in st.session_state:
     st.session_state.selected_site = site_names[0]
 
 # Resolve the currently active site before drawing the header.
-site_cfg = SITES[st.session_state.selected_site]
+site_cfg = (SITES[st.session_state.selected_site] if st.session_state.selected_site != ALL_STATIONS
+            else {'label': ALL_STATIONS, 'employees': {}, 'dept_order': [], 'dept_colors': {},
+                  'device_ip': '', 'username': '', 'password': ''})
 ALL_EMPLOYEES = site_cfg["employees"]
 DEPT_ORDER = [
     department
@@ -1916,7 +1959,7 @@ with header_login:
 
 st.markdown(
     f"<p style='color:{MUTED};margin-top:-10px'>Daily attendance reports — "
-    f"<b>{site_cfg['label']}</b> access control device.</p>",
+    f"<b>{site_cfg['label']}</b> {'— available stations only' if st.session_state.selected_site == ALL_STATIONS else 'access control device.'}</p>",
     unsafe_allow_html=True,
 )
 
@@ -1941,7 +1984,10 @@ if selected_site != st.session_state.selected_site:
     except AttributeError:
         st.experimental_rerun()
 
-st.caption(f"Active device: {site_cfg['device_ip']}")
+if st.session_state.selected_site == ALL_STATIONS:
+    st.caption('All stations are checked when generating reports. Unavailable stations are skipped.')
+else:
+    st.caption(f"Active device: {site_cfg['device_ip']}")
 
 st.markdown("---")
 
@@ -2001,6 +2047,13 @@ if st.session_state.selected_site == "Buguruni":
         with_lunch = st.button("View report with lunch time", key="buguruni_lunch_report")
 else:
     generate_report = st.button("View / Generate Reports")
+
+if st.session_state.selected_site == ALL_STATIONS:
+    st.session_state.pop('attendance_report_snapshot', None)
+    render_all_stations(SITES, start_date, end_date, tag, generate_report,
+                        client_for, all_station_tables, get_logo_path())
+    st.stop()
+st.session_state.pop('all_station_snapshot', None)
 
 report_scope = (st.session_state.selected_site, start_date.isoformat(), end_date.isoformat(),
                 repr(SITES[st.session_state.selected_site]['employees']))

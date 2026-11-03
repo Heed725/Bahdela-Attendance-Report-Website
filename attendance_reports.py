@@ -14,7 +14,7 @@ REPORT_NOTES = {
 
 def subset_tables(days, departments, mode, shift_start_for, employee_id_for):
     """Filter after attendance/absence calculation; never infer absence from early-only rows."""
-    if mode not in REPORT_NOTES:
+    if mode not in REPORT_TYPES:
         raise ValueError('Choose an attendance subset report.')
     columns = ['Date', 'Department', 'Employee Name', 'ID', 'Status']
     if mode != 'Absentees':
@@ -26,12 +26,13 @@ def subset_tables(days, departments, mode, shift_start_for, employee_id_for):
         records = []
         for department_key, data in attendance.items():
             department = departments[department_key]
-            if mode == 'Absentees':
+            if mode in ('Absentees', 'Full Attendance'):
                 for name in data['absent']:
                     records.append({'Date': day.isoformat(), 'Department': department['label'],
                                     'Employee Name': name, 'ID': employee_id_for(department_key, name),
                                     'Status': 'Absent'})
-                continue
+                if mode == 'Absentees':
+                    continue
             for row in data['present']:
                 check_in = row.get('check_in')
                 if not check_in or check_in == '-':
@@ -55,10 +56,11 @@ def subset_tables(days, departments, mode, shift_start_for, employee_id_for):
     return tables
 
 
-def export_subset(mode, site, start_date, end_date, tables, logo_path=None):
+def export_subset(mode, site, start_date, end_date, tables, logo_path=None, context_lines=()):
     title = f'{site} — {mode}'
     subtitle = f'{start_date:%d %b %Y} to {end_date:%d %b %Y}'
-    context = [REPORT_NOTES[mode], 'Times are in Tanzania local time (UTC+03:00).']
+    context = [REPORT_NOTES.get(mode, 'Daily attendance for roster employees, including those with no recorded check-in.'),
+               'Times are in Tanzania local time (UTC+03:00).', *context_lines]
     options = {'logo_path': logo_path, 'context_lines': context}
     return {
         'docx': export_docx(title, subtitle, tables, **options),
@@ -67,16 +69,17 @@ def export_subset(mode, site, start_date, end_date, tables, logo_path=None):
     }
 
 
-def render_subset_report(mode, site, start_date, end_date, tables, tag, logo_path=None):
+def render_subset_report(mode, site, start_date, end_date, tables, tag, logo_path=None, context_lines=()):
     import pandas as pd
     import streamlit as st
     st.markdown('### ' + site + ' — ' + mode)
-    st.info(REPORT_NOTES[mode])
+    st.info(REPORT_NOTES.get(mode, 'Combined daily attendance. Each row identifies its station.'))
     records = [record for _, _, rows in tables for record in rows]
     days, count, staff = st.columns(3)
     days.metric('Days', (end_date - start_date).days + 1)
     count.metric('Matching Daily Records', len(records))
-    staff.metric('Unique Staff', len({(record['ID'], record['Employee Name']) for record in records}))
+    staff.metric('Employee / Station Entries' if site == 'All stations' else 'Unique Staff',
+                 len({(record.get('Station', site), record['ID'], record['Employee Name']) for record in records}))
     downloads, viewer = st.tabs(['Download Reports', 'View Reports'])
     with viewer:
         for heading, columns, rows in tables:
@@ -87,7 +90,7 @@ def render_subset_report(mode, site, start_date, end_date, tables, tag, logo_pat
                 st.info('No matching employees for this date.')
     with downloads:
         st.caption('Downloads contain the same filtered employees and dates as View Reports.')
-        files = export_subset(mode, site, start_date, end_date, tables, logo_path)
+        files = export_subset(mode, site, start_date, end_date, tables, logo_path, context_lines)
         formats = [('Word (.docx)', 'docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
                    ('PDF', 'pdf', 'application/pdf'),
                    ('Excel (.xlsx)', 'xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')]

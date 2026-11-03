@@ -368,6 +368,38 @@ class HikvisionClient:
             if position > 100000:
                 raise HikvisionError("The terminal returned too many employee records.")
 
+    def search_events(self, start_date, end_date):
+        """Read complete attendance pages using this terminal's configured connection."""
+        search_id, position, events, seen_pages = str(uuid.uuid4()), 0, [], set()
+        while True:
+            result = self._request('POST', '/ISAPI/AccessControl/AcsEvent?format=json', json={
+                'AcsEventCond': {'searchID': search_id, 'searchResultPosition': position,
+                                 'maxResults': 30, 'major': 0, 'minor': 0,
+                                 'startTime': f'{start_date}T00:00:00+03:00',
+                                 'endTime': f'{end_date}T23:59:59+03:00'}})
+            if not result.ok:
+                raise HikvisionError('Could not read attendance: ' + response_message(result))
+            block = result.payload.get('AcsEvent')
+            if not isinstance(block, dict):
+                raise HikvisionError('The terminal returned an invalid attendance list.')
+            batch = block.get('InfoList', [])
+            if not isinstance(batch, list) or any(not isinstance(event, dict) for event in batch):
+                raise HikvisionError('The terminal returned an invalid attendance list.')
+            try:
+                total = int(block['totalMatches'])
+            except (KeyError, ValueError, TypeError) as exc:
+                raise HikvisionError('The terminal did not confirm the attendance count.') from exc
+            signature = repr(batch)
+            if batch and signature in seen_pages:
+                raise HikvisionError('The terminal repeated an attendance page.')
+            seen_pages.add(signature)
+            position += len(batch)
+            if total < position or (not batch and position < total) or position > 100000:
+                raise HikvisionError('The terminal returned an incomplete attendance list.')
+            events.extend(batch)
+            if position >= total:
+                return [event for event in events if event.get('employeeNoString') or event.get('employeeNo') or event.get('name')]
+
     def get_user(self, employee_no):
         for user in self.search_users(employee_no):
             if str(user.get("employeeNo")) == str(employee_no):

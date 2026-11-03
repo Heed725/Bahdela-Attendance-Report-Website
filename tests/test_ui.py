@@ -32,6 +32,59 @@ class FakeTerminal:
 
 
 class InterfaceTests(unittest.TestCase):
+    def test_all_stations_combines_active_sites_skips_offline_and_filters_loaded_data(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'_APP_LAUNCHED': '1', 'ROSTER_DB_PATH': folder+'/roster.db'}):
+            day = datetime.now(timezone(timedelta(hours=3))).date().isoformat()
+            buguruni, ocean = FakeTerminal('http://buguruni.test'), FakeTerminal('http://ocean.test')
+            buguruni.users = {'102': {'employeeNo': '102', 'name': 'Abdallah Iddi Omary'},
+                              '103': {'employeeNo': '103', 'name': 'Abubakary Hussein Sharif'}}
+            ocean.users = {'1652': {'employeeNo': '1652', 'name': 'Haruni Kenedy Saimoni'}}
+            buguruni.search_events = lambda start, end: [{'employeeNoString': '102', 'name': 'Abdallah Iddi Omary', 'time': day+'T07:45:00+03:00'}]
+            ocean.search_events = lambda start, end: [{'employeeNoString': '1652', 'name': 'Haruni Kenedy Saimoni', 'time': day+'T05:50:00+03:00'}]
+            def client(name, sites):
+                if name == 'Buguruni': return buguruni
+                if name == 'Puma Ocean Road': return ocean
+                raise HikvisionError('Offline')
+            with patch('employee_management.client_for', side_effect=client) as factory, \
+                    patch('streamlit.download_button', return_value=False) as downloads:
+                at = AppTest.from_file(str(Path(__file__).parents[1] / 'App.py'), default_timeout=30).run()
+                at.radio(key='site_selector_row').set_value('All stations').run()
+                self.assertFalse(at.exception)
+                next(b for b in at.button if b.label == 'View / Generate Reports').click().run()
+                self.assertFalse(at.exception)
+                self.assertTrue(any('Included active stations: Buguruni, Puma Ocean Road' in item.value for item in at.success))
+                self.assertTrue(any('Skipped unavailable stations:' in item.value and 'India' in item.value for item in at.warning))
+                rendered = ' '.join(frame.value.to_string() for frame in at.dataframe)
+                for value in ['Buguruni', 'Puma Ocean Road', 'Haruni Kenedy Saimoni', 'Abubakary Hussein Sharif']:
+                    self.assertIn(value, rendered)
+                self.assertEqual(downloads.call_count, 3)
+                self.assertEqual(factory.call_count, 7)
+                at.selectbox(key='attendance_report_type').select('Absentees').run()
+                rendered = ' '.join(frame.value.to_string() for frame in at.dataframe)
+                self.assertIn('Abubakary Hussein Sharif', rendered)
+                self.assertNotIn('Haruni Kenedy Saimoni', rendered)
+                self.assertNotIn('Puma Upanga', rendered)
+                self.assertEqual(factory.call_count, 7)
+                at.selectbox(key='attendance_report_type').select('Early Attendance').run()
+                rendered = ' '.join(frame.value.to_string() for frame in at.dataframe)
+                self.assertIn('Abdallah Iddi Omary', rendered)
+                self.assertIn('Haruni Kenedy Saimoni', rendered)
+                at.selectbox(key='attendance_report_type').select('Checked In Only').run()
+                self.assertEqual(sum(len(frame.value) for frame in at.dataframe), 2)
+                self.assertEqual(factory.call_count, 7)
+
+    def test_all_stations_no_active_stations_has_no_reports_or_downloads(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'_APP_LAUNCHED': '1', 'ROSTER_DB_PATH': folder+'/roster.db'}), \
+                patch('employee_management.client_for', side_effect=HikvisionError('Offline')), \
+                patch('streamlit.download_button', return_value=False) as downloads:
+            at = AppTest.from_file(str(Path(__file__).parents[1] / 'App.py'), default_timeout=30).run()
+            at.radio(key='site_selector_row').set_value('All stations').run()
+            next(b for b in at.button if b.label == 'View / Generate Reports').click().run()
+            self.assertFalse(at.exception)
+            self.assertTrue(any('No stations could be read' in item.value for item in at.error))
+            downloads.assert_not_called()
+            self.assertFalse(at.dataframe)
+
     def test_filtered_attendance_view_and_downloads_share_selected_people(self):
         for mode, expected_name, excluded_name in [
             ('Early Attendance', 'Abdallah Iddi Omary', 'Abubakary Hussein Sharif'),
