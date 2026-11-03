@@ -32,6 +32,36 @@ class FakeTerminal:
 
 
 class InterfaceTests(unittest.TestCase):
+    def test_filtered_attendance_view_and_downloads_share_selected_people(self):
+        for mode, expected_name, excluded_name in [
+            ('Early Attendance', 'Abdallah Iddi Omary', 'Abubakary Hussein Sharif'),
+            ('Checked In Only', 'Abdallah Iddi Omary', 'Abubakary Hussein Sharif'),
+            ('Absentees', 'Abubakary Hussein Sharif', 'Abdallah Iddi Omary'),
+        ]:
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'_APP_LAUNCHED': '1', 'ROSTER_DB_PATH': folder+'/roster.db'}):
+                terminal = FakeTerminal('http://fake.test')
+                terminal.users = {'102': {'employeeNo': '102', 'name': 'Abdallah Iddi Omary'},
+                                  '103': {'employeeNo': '103', 'name': 'Abubakary Hussein Sharif'}}
+                day = datetime.now(timezone(timedelta(hours=3))).date().isoformat()
+                events = [{'employeeNoString': '102', 'name': 'Abdallah Iddi Omary', 'time': day+'T07:45:00+03:00'}]
+                response = type('Response', (), {'status_code': 200, 'json': lambda self: {
+                    'AcsEvent': {'InfoList': events, 'totalMatches': 1, 'numOfMatches': 1}}})()
+                with patch('employee_management.client_for', return_value=terminal), \
+                        patch('requests.post', return_value=response), \
+                        patch('streamlit.download_button', return_value=False) as downloads:
+                    at = AppTest.from_file(str(Path(__file__).parents[1] / 'App.py'), default_timeout=30).run()
+                    at.selectbox(key='attendance_report_type').select(mode).run()
+                    next(b for b in at.button if b.label == 'View / Generate Reports').click().run()
+                    self.assertFalse(at.exception)
+                    self.assertFalse(at.error)
+                    rendered = ' '.join(frame.value.to_string() for frame in at.dataframe)
+                    self.assertIn(expected_name, rendered)
+                    self.assertNotIn(excluded_name, rendered)
+                    self.assertEqual(downloads.call_count, 3)
+                    self.assertEqual([tab.label for tab in at.tabs], ['Download Reports', 'View Reports'])
+                    for call in downloads.call_args_list:
+                        self.assertIn(mode.replace(' ', '_'), call.kwargs['file_name'])
+
     def test_existing_employee_enrollment_without_adding_or_roster_membership(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'_APP_LAUNCHED': '1', 'ROSTER_DB_PATH': folder+'/roster.db'}):
             terminal = FakeTerminal('http://fake.test')

@@ -139,7 +139,7 @@ def column_weights(columns):
             else 1.6 if name == 'Incomplete' else 1.45 if name == 'Status' else 1.2 for name in columns]
 
 
-def export_lunch_docx(title, subtitle, tables, logo_path=None):
+def export_lunch_docx(title, subtitle, tables, logo_path=None, *, context_lines=None):
     from docx import Document
     from docx.shared import Cm, Pt, RGBColor
     from docx.oxml import OxmlElement
@@ -165,8 +165,8 @@ def export_lunch_docx(title, subtitle, tables, logo_path=None):
         document.add_picture(logo_path, width=Cm(3))
     document.add_heading(title, 0)
     document.add_paragraph(subtitle)
-    document.add_paragraph(SCHEDULE)
-    document.add_paragraph('Blank clockings mean no scan was recorded. Net hours require all four clockings.')
+    for line in context_lines if context_lines is not None else [SCHEDULE, 'Blank clockings mean no scan was recorded. Net hours require all four clockings.']:
+        document.add_paragraph(line)
     for heading, columns, rows in tables:
         document.add_heading(heading, 2)
         table = document.add_table(rows=1, cols=len(columns))
@@ -223,7 +223,7 @@ def export_lunch_docx(title, subtitle, tables, logo_path=None):
     return output.getvalue()
 
 
-def export_lunch_pdf(title, subtitle, tables, logo_path=None):
+def export_lunch_pdf(title, subtitle, tables, logo_path=None, *, context_lines=None):
     from pathlib import Path
     import reportlab
     from reportlab.pdfbase import pdfmetrics
@@ -249,7 +249,8 @@ def export_lunch_pdf(title, subtitle, tables, logo_path=None):
         ratio = 75 / logo.imageWidth
         logo.drawWidth, logo.drawHeight = 75, logo.imageHeight * ratio
         story.append(logo)
-    for text in [title, subtitle, SCHEDULE, 'Blank clockings mean no scan was recorded. Net hours require all four clockings.']:
+    context = context_lines if context_lines is not None else [SCHEDULE, 'Blank clockings mean no scan was recorded. Net hours require all four clockings.']
+    for text in [title, subtitle, *context]:
         story.extend([Paragraph(escape(text), heading_style if text == title else body), Spacer(1, 5)])
     for heading, columns, rows in tables:
         story.extend([Spacer(1, 8), Paragraph(escape(heading), heading_style), Spacer(1, 4)])
@@ -270,16 +271,16 @@ def export_lunch_pdf(title, subtitle, tables, logo_path=None):
     return output.getvalue()
 
 
-def export_lunch_xlsx(title, subtitle, tables, logo_path=None):
+def export_lunch_xlsx(title, subtitle, tables, logo_path=None, *, context_lines=None, sheet_name='Lunch report'):
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
     from openpyxl.utils import get_column_letter
     workbook = Workbook()
     sheet = workbook.active
-    sheet.title = 'Lunch report'
+    sheet.title = sheet_name
     count = len(tables[0][1]) if tables else len(DAILY_COLUMNS)
-    for index, text in enumerate([title, subtitle, SCHEDULE,
-                                  'Blank clockings mean no scan was recorded. Net hours require all four clockings.'], 1):
+    context = context_lines if context_lines is not None else [SCHEDULE, 'Blank clockings mean no scan was recorded. Net hours require all four clockings.']
+    for index, text in enumerate([title, subtitle, *context], 1):
         sheet.merge_cells(start_row=index, start_column=1, end_row=index, end_column=count)
         cell = sheet.cell(index, 1, text)
         cell.font = Font(name='Arial', bold=index == 1, size=14 if index == 1 else 10, color='8B0000')

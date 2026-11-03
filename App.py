@@ -11,6 +11,7 @@ from employee_management import roster_store, render_login, render_management, r
 from hikvision import HikvisionError
 from report_roster import current_report_events
 from lunch_reports import render_lunch_report
+from attendance_reports import REPORT_TYPES, REPORT_NOTES, subset_tables, render_subset_report
 import requests
 import pandas as pd
 from requests.auth import HTTPDigestAuth
@@ -1991,6 +1992,11 @@ st.markdown(f"<small style='color:{MUTED}'>{num_days} day(s) selected — <b>{pe
 st.markdown("---")
 
 # ── Generate ──────────────────────────────────────────────────
+attendance_report_type = st.selectbox('Attendance report type', REPORT_TYPES, key='attendance_report_type')
+if attendance_report_type in REPORT_NOTES:
+    st.caption(REPORT_NOTES[attendance_report_type])
+    if st.session_state.selected_site == 'Buguruni':
+        st.caption('This selection applies to View / Generate Reports. The lunch-time report uses its own four-clockings format.')
 with_lunch = False
 if st.session_state.selected_site == "Buguruni":
     regular_button, lunch_button = st.columns(2)
@@ -2072,6 +2078,21 @@ if generate_report or with_lunch:
         )
     rows_by_date=defaultdict(list)
     for r in rows: rows_by_date[r["date"]].append(r)
+
+    if attendance_report_type != 'Full Attendance':
+        attendance_days = []
+        attendance_day = start_date
+        while attendance_day <= end_date:
+            attendance_days.append((attendance_day, build_dept_data(rows_by_date.get(attendance_day.isoformat(), []))))
+            attendance_day += timedelta(days=1)
+        tables = subset_tables(attendance_days, ALL_EMPLOYEES, attendance_report_type,
+            lambda department, arrival: get_shift_window(department, arrival)[0],
+            get_configured_employee_id)
+        render_subset_report(attendance_report_type, site_cfg['label'], start_date, end_date,
+                             tables, tag, get_logo_path())
+        progress.progress(1.0)
+        status.success(attendance_report_type + ' reports ready!')
+        st.stop()
 
     # ── Summary cards ─────────────────────────────────────────
     progress.progress(0.65)
