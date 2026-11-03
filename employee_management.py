@@ -12,6 +12,7 @@ from hikvision import HikvisionClient, HikvisionError, response_message
 from registration_sites import load_sites
 from roster_store import RosterStore, normalized, configured_names
 from report_roster import current_report_roster
+from employee_lookup import find_terminal_employees
 from credential_transfer import (export_credentials, ensure_cards_available,
                                  copy_credentials, verify_credentials, Credentials, read_fingerprints)
 from biometric_protocol import prepare_face_jpeg, ENROLLMENT_RELEASE
@@ -432,6 +433,31 @@ def render_management(sites, store):
 
 
 def _render_management(sites, store):
+    with st.expander('Find employee across all terminals'):
+        st.caption('Read-only search of all terminal accounts, including employees outside the report roster. Separate name variants or IDs with commas.')
+        query = st.text_input('Employee name or ID', key='manage_lookup_query')
+        if st.button('Search all terminals', disabled=not query.strip()):
+            require_permission(st.session_state, 'list')
+            clients = {site: client_for(site, sites) for site in sites}
+            with st.spinner('Checking all terminals…'):
+                matches, statuses = find_terminal_employees(clients, query)
+            st.session_state['manage_lookup_result'] = (query, matches, statuses)
+        result = st.session_state.get('manage_lookup_result')
+        if result:
+            searched, matches, statuses = result
+            st.caption('Results for: ' + searched)
+            if matches:
+                st.dataframe(matches, use_container_width=True, hide_index=True)
+                for match in matches:
+                    st.write(f"{match['Station']} · {match['Name']} · ID {match['Employee ID']}")
+            else:
+                st.info('No matching accounts found on the terminals that responded.')
+            for status in statuses:
+                message = f"{status['Station']}: {status['Status']} ({status['Records checked']} records checked)"
+                if status['Status'] == 'Checked':
+                    st.caption(message)
+                else:
+                    st.warning(message)
     add_tab, transfer_tab, delete_tab, history_tab = st.tabs(['Add employee', 'Transfer employee', 'Delete employee', 'History'])
     names = list(sites)
     with add_tab:
