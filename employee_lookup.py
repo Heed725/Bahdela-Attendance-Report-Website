@@ -18,7 +18,18 @@ def find_terminal_employees(clients, query):
                 name = str(user.get('name', ''))
                 if any(term == employee_id if term.isdigit() else term in normalized(name)
                        for term in terms):
-                    matches.append({'Station': site, 'Employee ID': employee_id, 'Name': name})
+                    valid = user.get('Valid') or {}
+                    matches.append({
+                        'Station': site, 'Employee ID': employee_id, 'Name': name,
+                        'Fingerprints': user.get('numOfFP', 'Not reported'),
+                        'Face photographs': user.get('numOfFace', 'Not reported'),
+                        'Cards': user.get('numOfCard', 'Not reported'),
+                        'User type': user.get('userType', 'Not reported'),
+                        'Validity enabled': valid.get('enable', 'Not reported'),
+                        'Valid from': valid.get('beginTime', 'Not reported'),
+                        'Valid until': valid.get('endTime', 'Not reported'),
+                        'Door access': user.get('doorRight', 'Not reported'),
+                    })
             return matches, {'Station': site, 'Status': 'Checked', 'Records checked': len(users)}
         except Exception as exc:
             # A failed terminal must never be reported as having no matches.

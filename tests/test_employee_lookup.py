@@ -31,3 +31,14 @@ class EmployeeLookupTests(unittest.TestCase):
         self.assertEqual(matches, [])
         with self.assertRaises(ValueError):
             find_terminal_employees({}, ' , ')
+
+    def test_reports_enrollment_metadata_without_credentials(self):
+        matches, _ = find_terminal_employees({'Ocean': Terminal([{
+            'employeeNo': '1652', 'name': 'Haruni', 'numOfFP': 1,
+            'numOfFace': 1, 'numOfCard': 0, 'userType': 'normal',
+            'Valid': {'enable': True, 'beginTime': '2026-01-01', 'endTime': '2036-12-31'},
+            'doorRight': '1', 'password': 'must not be returned',
+        }])}, '1652')
+        self.assertEqual(matches[0]['Fingerprints'], 1)
+        self.assertEqual(matches[0]['Valid until'], '2036-12-31')
+        self.assertNotIn('password', matches[0])

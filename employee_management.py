@@ -450,6 +450,8 @@ def _render_management(sites, store):
                 st.dataframe(matches, use_container_width=True, hide_index=True)
                 for match in matches:
                     st.write(f"{match['Station']} · {match['Name']} · ID {match['Employee ID']}")
+                    st.write(f"Enrolled: {match.get('Fingerprints', 'Not reported')} fingerprint(s), {match.get('Face photographs', 'Not reported')} face photograph(s), {match.get('Cards', 'Not reported')} card(s).")
+                    st.caption(f"User type: {match.get('User type', 'Not reported')} · Door access: {match.get('Door access', 'Not reported')} · Validity enabled: {match.get('Validity enabled', 'Not reported')} · Valid from: {match.get('Valid from', 'Not reported')} · Valid until: {match.get('Valid until', 'Not reported')}")
             else:
                 st.info('No matching accounts found on the terminals that responded.')
             for status in statuses:

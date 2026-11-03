@@ -318,11 +318,9 @@ SITES = {
                 "members":["Abdul Timanya Renatus","Ahmed Ally Mpogo","Azihar Mwijage Mzamiru",
                            "Bashiru Said Mgodoka","Iddi Rashidi Abdallah","Issa Sharahbil Siraji",
                            "Juma Othmani Issa","Juma Yahya Bilal","Mohamed Abdallah Hamad",
-                           "Muhsin Oscar Matikila","Shali Sebe Bazo","Wilibald Antigon Urio",
-                           "Haruni Kenedy Saimoni"],
+                           "Muhsin Oscar Matikila","Shali Sebe Bazo","Wilibald Antigon Urio"],
                 "member_ids": {
                     "Juma Yahya Bilal":"9089",
-                    "Haruni Kenedy Saimoni":"1652",
                 },
             },
             "Walinzi": {
@@ -458,8 +456,9 @@ SITES = {
                     "Mulla Omari Kadari","Mzee Hamis Kassim","Omari Yusufu Shebly",
                     "Said Ramadhani Mnjama","Salim Siraji Bajuni","Salmin Mdhihiri Yahaya",
                     "Salmu Omari Siraji","Thomas Constans Kereza","Zahoro Rashidi Mbotoni",
-                    "Emmanuel Kituki",
+                    "Emmanuel Kituki","Haruni Kenedy Saimoni",
                 ],
+                "member_ids": {"Haruni Kenedy Saimoni":"1652"},
             },
             "Security": {
                 "label":"SECURITY", "shift":"Shift: 09:00 - 09:00 (24 Hrs)",
