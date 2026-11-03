@@ -1,7 +1,7 @@
 """Daily attendance subsets shared by the viewer and all three exports."""
 from datetime import datetime
 
-from lunch_reports import export_lunch_docx, export_lunch_pdf, export_lunch_xlsx
+from report_tables import export_docx, export_pdf, export_xlsx
 
 
 REPORT_TYPES = ['Full Attendance', 'Early Attendance', 'Checked In Only', 'Absentees']
@@ -61,9 +61,9 @@ def export_subset(mode, site, start_date, end_date, tables, logo_path=None):
     context = [REPORT_NOTES[mode], 'Times are in Tanzania local time (UTC+03:00).']
     options = {'logo_path': logo_path, 'context_lines': context}
     return {
-        'docx': export_lunch_docx(title, subtitle, tables, **options),
-        'pdf': export_lunch_pdf(title, subtitle, tables, **options),
-        'xlsx': export_lunch_xlsx(title, subtitle, tables, sheet_name=mode, **options),
+        'docx': export_docx(title, subtitle, tables, **options),
+        'pdf': export_pdf(title, subtitle, tables, **options),
+        'xlsx': export_xlsx(title, subtitle, tables, sheet_name=mode, **options),
     }
 
 
