@@ -12,10 +12,29 @@
   padding-bottom: 2rem;
 }
 
+.st-key-site_selector_row {
+  container: station-selector / inline-size;
+  width: 100%;
+}
+
 .st-key-site_selector_row [role="radiogroup"] {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(142px, 100%), 1fr));
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
   gap: 0.5rem;
+}
+
+@container station-selector (min-width: 540px) {
+  .st-key-site_selector_row [role="radiogroup"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@container station-selector (min-width: 1060px) {
+  .st-key-site_selector_row [role="radiogroup"] {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
 }
 
 .st-key-site_selector_row [role="radiogroup"] label {
