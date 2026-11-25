@@ -1,10 +1,10 @@
 [theme]
+primaryColor = "#CC050D"
 baseRadius = "0.625rem"
 buttonRadius = "0.625rem"
 showWidgetBorder = true
 
 [theme.light]
-primaryColor = "#8F2741"
 backgroundColor = "#FFFDFB"
 secondaryBackgroundColor = "#F5EFEB"
 textColor = "#291D25"
@@ -12,10 +12,9 @@ borderColor = "#DDCFD4"
 dataframeHeaderBackgroundColor = "#F2E8EC"
 
 [theme.dark]
-primaryColor = "#B63E58"
 backgroundColor = "#16141C"
 secondaryBackgroundColor = "#24212E"
 textColor = "#F3EFF6"
 borderColor = "#494356"
 dataframeHeaderBackgroundColor = "#2B2736"
-linkColor = "#FFB3C4"
+linkColor = "#FFB7BA"
