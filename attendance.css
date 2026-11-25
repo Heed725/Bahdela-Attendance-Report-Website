@@ -101,6 +101,12 @@
   outline-offset: 2px;
 }
 
+/* The rounded tab already marks selection in Employee Management. */
+.st-key-employee_management_tabs .react-aria-SelectionIndicator,
+.st-key-employee_management_tabs [data-baseweb="tab-highlight"] {
+  display: none;
+}
+
 [data-testid="stMetric"],
 .department-card {
   min-width: 0;

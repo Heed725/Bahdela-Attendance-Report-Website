@@ -496,8 +496,9 @@ def _render_management(sites, store):
                     st.caption(message)
                 else:
                     st.warning(message)
-    add_tab, enroll_tab, transfer_tab, delete_tab, history_tab = st.tabs([
-        'Add employee', 'Face / fingerprint', 'Transfer employee', 'Delete employee', 'History'])
+    with st.container(key='employee_management_tabs'):
+        add_tab, enroll_tab, transfer_tab, delete_tab, history_tab = st.tabs([
+            'Add employee', 'Face / fingerprint', 'Transfer employee', 'Delete employee', 'History'])
     names = list(sites)
     with enroll_tab:
         render_existing_enrollment(sites)
