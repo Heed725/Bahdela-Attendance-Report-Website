@@ -65,12 +65,40 @@
   outline-offset: 2px;
 }
 
-.stTabs [role="tab"]:hover,
-.stTabs [role="tab"]:hover p,
-.stTabs [role="tab"][aria-selected="true"],
-.stTabs [role="tab"][aria-selected="true"] p {
+.stTabs [role="tab"] {
+  min-height: 42px;
+  margin-block: 0.2rem 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--report-brand);
+  border-radius: 0.625rem;
+  background: var(--report-surface);
   color: var(--report-accent);
   font-weight: 700;
+}
+
+.stTabs [role="tab"]:hover {
+  background: var(--report-selected);
+}
+
+.stTabs [role="tab"][aria-selected="true"],
+.stDownloadButton > button:not(:disabled),
+.st-key-buguruni_lunch_report button:not(:disabled) {
+  border-color: var(--report-brand);
+  background: var(--report-brand);
+  color: #FFFFFF;
+}
+
+.stTabs [role="tab"] p,
+.stDownloadButton > button:not(:disabled) p,
+.st-key-buguruni_lunch_report button:not(:disabled) p {
+  color: inherit;
+}
+
+.stTabs [role="tab"]:focus-visible,
+.stDownloadButton > button:focus-visible,
+.st-key-buguruni_lunch_report button:focus-visible {
+  outline: 2px solid var(--report-accent);
+  outline-offset: 2px;
 }
 
 [data-testid="stMetric"],
