@@ -20,6 +20,7 @@ import urllib3
 import io, sys, subprocess, os, re, sqlite3
 from datetime import date, timedelta, datetime, timezone
 from collections import defaultdict
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from docx import Document
@@ -100,185 +101,7 @@ if favicon_path:
 
 st.set_page_config(**page_config)
 
-# ── LIGHT-ONLY RESPONSIVE THEME ──────────────────────────────
-BG      = "#FFFFFF"
-SIDEBAR = "#F3EDE3"
-CARD_BG = "#FFF9F2"
-H1_COL  = "#5A0000"
-H2_COL  = "#8B4500"
-TXT     = "#2D2D2D"
-MUTED   = "#6F6F6F"
-INP_BG  = "#FFFFFF"
-DL_BG   = "#FFFFFF"
-
-st.markdown(f"""
-<style>
-  :root {{ color-scheme: light only; }}
-  html, body, [class*="css"] {{ font-family:Arial,sans-serif; }}
-  .stApp {{ background-color:{BG}; color:{TXT}; }}
-  .block-container {{ max-width:1500px; padding-top:1.25rem; padding-bottom:2rem; }}
-  [data-testid="stSidebar"] {{ background-color:{SIDEBAR}; border-right:1px solid #E3D8C8; }}
-
-  h1,h2,h3,h4 {{ font-family:Arial,sans-serif; }}
-  h1 {{ color:{H1_COL} !important; }}
-  h2,h3,h4 {{ color:{H2_COL} !important; }}
-  p,label,div,span {{ color:{TXT}; font-family:Arial,sans-serif; }}
-
-  [data-testid="stMetric"] {{
-    background:{CARD_BG}; border:1px solid #D8C4A7;
-    border-radius:10px; padding:12px 16px;
-  }}
-  [data-testid="stMetricLabel"] {{ color:{H2_COL} !important; font-size:13px; }}
-  [data-testid="stMetricValue"] {{ color:{H1_COL} !important; font-size:24px; font-weight:bold; }}
-
-  /* Keep every normal button readable. */
-  .stButton > button {{
-    background-color:#8B0000 !important; color:#FFFFFF !important;
-    border:1px solid #8B0000 !important; border-radius:7px;
-    font-weight:bold; font-size:14px; padding:8px 18px;
-    min-height:42px; width:100%;
-  }}
-  .stButton > button p,
-  .stButton > button span,
-  .stButton > button div {{ color:#FFFFFF !important; }}
-  .stButton > button:hover {{
-    background-color:#C0392B !important; border-color:#C0392B !important;
-    color:#FFFFFF !important;
-  }}
-
-  /* Download buttons stay white with dark visible text. */
-  .stDownloadButton > button {{
-    background-color:#FFFFFF !important; color:#8B0000 !important;
-    border:2px solid #8B0000 !important; border-radius:8px;
-    font-size:14px; font-weight:800; padding:9px 14px;
-    min-height:46px; width:100%;
-    box-shadow:0 2px 6px rgba(90,0,0,.08);
-  }}
-  .stDownloadButton > button p,
-  .stDownloadButton > button span,
-  .stDownloadButton > button div {{ color:#8B0000 !important; }}
-  .stDownloadButton > button:hover {{
-    background-color:#FFF3CD !important; color:#5A0000 !important;
-  }}
-
-  input {{ background-color:{INP_BG} !important; color:{TXT} !important; }}
-  [data-baseweb="select"] > div {{ background:#FFFFFF !important; color:{TXT} !important; }}
-  hr {{ border-color:#D8C4A7 !important; }}
-  .stProgress > div > div {{ background-color:#8B0000 !important; }}
-  /* Make report choices look like clear, high-contrast buttons. */
-  .stTabs [data-baseweb="tab-list"] {{
-    display:flex !important;
-    flex-wrap:wrap !important;
-    gap:10px !important;
-    overflow-x:visible !important;
-    padding:4px 0 10px 0 !important;
-  }}
-  .stTabs [data-baseweb="tab"] {{
-    flex:1 1 210px !important;
-    justify-content:center !important;
-    min-height:48px !important;
-    padding:10px 16px !important;
-    background:#FFFFFF !important;
-    border:2px solid #8B0000 !important;
-    border-radius:9px !important;
-    color:#8B0000 !important;
-    font-weight:800 !important;
-    white-space:nowrap !important;
-    box-shadow:0 2px 6px rgba(90,0,0,.08);
-  }}
-  .stTabs [data-baseweb="tab"] p,
-  .stTabs [data-baseweb="tab"] span,
-  .stTabs [data-baseweb="tab"] div {{
-    color:#8B0000 !important;
-    font-weight:800 !important;
-  }}
-  .stTabs [data-baseweb="tab"]:hover {{
-    background:#FFF7F2 !important;
-    border-color:#C0392B !important;
-  }}
-  .stTabs [data-baseweb="tab"][aria-selected="true"] {{
-    background:#8B0000 !important;
-    border-color:#8B0000 !important;
-    color:#FFFFFF !important;
-    box-shadow:0 3px 9px rgba(90,0,0,.18);
-  }}
-  .stTabs [data-baseweb="tab"][aria-selected="true"] p,
-  .stTabs [data-baseweb="tab"][aria-selected="true"] span,
-  .stTabs [data-baseweb="tab"][aria-selected="true"] div {{
-    color:#FFFFFF !important;
-  }}
-  .stTabs [data-baseweb="tab-highlight"] {{ display:none !important; }}
-
-  /* Site choices replace the old separate Switch buttons. */
-  div[data-testid="stRadio"] [role="radiogroup"] {{
-    display:flex !important; flex-wrap:wrap !important;
-    gap:8px !important; align-items:stretch !important;
-  }}
-  div[data-testid="stRadio"] [role="radiogroup"] > label {{
-    flex:1 1 145px !important; min-width:130px !important;
-    margin:0 !important; padding:11px 12px !important;
-    background:#FFFFFF !important; border:1px solid #D9CEC0 !important;
-    border-radius:9px !important; justify-content:center !important;
-    text-align:center !important; cursor:pointer !important;
-  }}
-  div[data-testid="stRadio"] [role="radiogroup"] > label:hover {{
-    border-color:#8B0000 !important; background:#FFF9F2 !important;
-  }}
-  div[data-testid="stRadio"] [role="radiogroup"] > label:has(input:checked) {{
-    background:#8B0000 !important; border-color:#D4A017 !important;
-    box-shadow:0 2px 8px rgba(139,0,0,.14);
-  }}
-  div[data-testid="stRadio"] [role="radiogroup"] > label:has(input:checked) p,
-  div[data-testid="stRadio"] [role="radiogroup"] > label:has(input:checked) span,
-  div[data-testid="stRadio"] [role="radiogroup"] > label:has(input:checked) div {{
-    color:#FFFFFF !important; font-weight:bold !important;
-  }}
-  div[data-testid="stRadio"] [role="radiogroup"] > label > div:first-child {{ display:none !important; }}
-  div[data-testid="stRadio"] [role="radiogroup"] p {{
-    width:100%; text-align:center; margin:0; font-weight:700;
-  }}
-
-  .department-grid {{
-    display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr));
-    gap:10px; margin-top:8px;
-  }}
-  .department-card {{
-    padding:10px 8px; border-radius:7px; text-align:center;
-    min-height:86px; display:flex; flex-direction:column;
-    justify-content:center;
-  }}
-
-  @media (max-width: 768px) {{
-    .stTabs [data-baseweb="tab"] {{
-      flex:1 1 100% !important;
-      min-height:50px !important;
-      font-size:14px !important;
-    }}
-    .stDownloadButton > button {{
-      min-height:48px !important;
-      font-size:14px !important;
-    }}
-    .block-container {{ padding:0.8rem 0.7rem 1.7rem 0.7rem; }}
-    h1 {{ font-size:1.65rem !important; line-height:1.2 !important; }}
-    [data-testid="column"] {{ min-width:0 !important; }}
-    [data-testid="stMetric"] {{ padding:10px 11px; }}
-    [data-testid="stMetricValue"] {{ font-size:20px !important; }}
-    div[data-testid="stRadio"] [role="radiogroup"] > label {{
-      flex:1 1 calc(50% - 8px) !important; min-width:125px !important;
-      padding:10px 7px !important;
-    }}
-    .department-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }}
-    .stButton > button, .stDownloadButton > button {{ min-height:46px; }}
-  }}
-
-  @media (max-width: 420px) {{
-    div[data-testid="stRadio"] [role="radiogroup"] > label {{
-      flex:1 1 100% !important;
-    }}
-    .department-grid {{ grid-template-columns:1fr; }}
-  }}
-</style>
-""", unsafe_allow_html=True)
+st.html(Path(APP_DIR) / "attendance.css")
 
 # ══════════════════════════════════════════════════════════════
 # ── MULTI-SITE CONFIG ─────────────────────────────────────────
@@ -1013,38 +836,30 @@ def checkin_fill(dept_key,check_in):
     if ci > 540: return "FFCCCC","CC0000"
     return "FFFFFF","333333"
 
+# Canvas-rendered cells use self-contained color pairs that work in both themes.
+ATTENDANCE_BADGES = {
+    "Early": "#20604A",
+    "Late": "#963745",
+    "Absent": "#4E5768",
+}
+CHECKIN_BADGES = {"C6EFCE": "Early", "FFCCCC": "Late"}
+
+
 def style_viewer_dataframe(dataframe, dept_key):
-    """Apply the report's attendance colours to the on-screen viewer."""
-    columns = list(dataframe.columns)
-    check_in_index = columns.index("Check In")
-
+    """Highlight attendance states while letting the grid theme paint the rows."""
     def style_row(row):
-        styles = ["" for _ in columns]
+        styles = dict.fromkeys(dataframe.columns, "")
+        if row["Status"] == "Absent":
+            styles["Status"] = f"background-color: {ATTENDANCE_BADGES['Absent']}; color: white;"
+        elif row["Check In"]:
+            fill, _ = checkin_fill(dept_key, row["Check In"])
+            badge = CHECKIN_BADGES.get(fill)
+            if badge:
+                styles["Check In"] = f"background-color: {ATTENDANCE_BADGES[badge]}; color: white;"
+        return pd.Series(styles)
 
-        # Absent staff use the same grey styling as exported reports.
-        if row.get("Status") == "Absent":
-            return [
-                "background-color: #EEEEEE; color: #999999;"
-                for _ in columns
-            ]
+    return dataframe.style.apply(style_row, axis=1)
 
-        check_in = str(row.get("Check In") or "").strip()
-        if check_in:
-            background, text_colour = checkin_fill(dept_key, check_in)
-            styles[check_in_index] = (
-                f"background-color: #{background}; "
-                f"color: #{text_colour}; font-weight: 700;"
-            )
-        return styles
-
-    return (
-        dataframe.style
-        .apply(style_row, axis=1)
-        .set_properties(**{
-            "border-color": "#D4A017",
-            "vertical-align": "middle",
-        })
-    )
 
 def hex2rgb(h):
     h=h.lstrip("#"); return tuple(int(h[i:i+2],16) for i in (0,2,4))
@@ -1957,11 +1772,9 @@ with header_title:
 with header_login:
     render_login()
 
-st.markdown(
-    f"<p style='color:{MUTED};margin-top:-10px'>Daily attendance reports — "
-    f"<b>{site_cfg['label']}</b> {'— available stations only' if st.session_state.selected_site == ALL_STATIONS else 'access control device.'}</p>",
-    unsafe_allow_html=True,
-)
+site_description = ("available stations only" if st.session_state.selected_site == ALL_STATIONS
+                    else f"**{site_cfg['label']}** access control device")
+st.caption(f"Daily attendance reports · {site_description}")
 
 if st.session_state.get("management_message"):
     st.success(st.session_state.pop("management_message"))
@@ -2033,8 +1846,7 @@ if num_days>=28:   period_label="Monthly"
 elif num_days>=7:  period_label="Weekly"
 else:              period_label="Daily"
 
-st.markdown(f"<small style='color:{MUTED}'>{num_days} day(s) selected — <b>{period_label}</b> report</small>",
-            unsafe_allow_html=True)
+st.caption(f"{num_days} day(s) selected — **{period_label}** report")
 st.markdown("---")
 
 # ── Generate ──────────────────────────────────────────────────
@@ -2042,11 +1854,11 @@ with_lunch = False
 if st.session_state.selected_site == "Buguruni":
     regular_button, lunch_button = st.columns(2)
     with regular_button:
-        generate_report = st.button("View / Generate Reports")
+        generate_report = st.button("View / Generate Reports", type="primary", width="stretch")
     with lunch_button:
-        with_lunch = st.button("View report with lunch time", key="buguruni_lunch_report")
+        with_lunch = st.button("View report with lunch time", key="buguruni_lunch_report", width="stretch")
 else:
-    generate_report = st.button("View / Generate Reports")
+    generate_report = st.button("View / Generate Reports", type="primary")
 
 if st.session_state.selected_site == ALL_STATIONS:
     st.session_state.pop('attendance_report_snapshot', None)
@@ -2175,10 +1987,10 @@ if report_snapshot:
         for dk in DEPT_ORDER:
             pd_=dept_data_last[dk]
             department_cards.append(
-                f"<div class='department-card' style='background:{DEPT_COLORS[dk]}'>"
-                f"<div style='color:#FFF3CD;font-weight:bold;font-size:11px'>{ALL_EMPLOYEES[dk]['label']}</div>"
-                f"<div style='color:#FFFFFF;font-size:22px;font-weight:bold'>{len(pd_['present'])}</div>"
-                f"<div style='color:#F2E7D5;font-size:10px'>of {len(pd_['present'])+len(pd_['absent'])}</div>"
+                f"<div class='department-card' style='--department-color:{DEPT_COLORS[dk]}'>"
+                f"<div class='department-name'>{ALL_EMPLOYEES[dk]['label']}</div>"
+                f"<div class='department-value'>{len(pd_['present'])}</div>"
+                f"<div class='department-total'>of {len(pd_['present'])+len(pd_['absent'])}</div>"
                 f"</div>"
             )
         department_cards.append("</div>")
@@ -2241,18 +2053,13 @@ if report_snapshot:
                 "shift ending time or later. Earlier or repeated scans remain blank."
             )
 
-        st.markdown(
-            """
-            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:4px 0 14px 0;">
-              <span style="font-weight:700;">Check-in key:</span>
-              <span style="background:#C6EFCE;color:#276221;padding:4px 10px;border:1px solid #9BCB9F;border-radius:4px;">Early</span>
-              <span style="background:#FFFFFF;color:#333333;padding:4px 10px;border:1px solid #CCCCCC;border-radius:4px;">On time</span>
-              <span style="background:#FFCCCC;color:#CC0000;padding:4px 10px;border:1px solid #E6A0A0;border-radius:4px;">Late</span>
-              <span style="background:#EEEEEE;color:#777777;padding:4px 10px;border:1px solid #CCCCCC;border-radius:4px;">Absent</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        legend = ['<div class="attendance-key"><strong>Check-in key:</strong>']
+        for label in ("Early", "On time", "Late", "Absent"):
+            background = ATTENDANCE_BADGES.get(label)
+            style = f' style="background:{background};color:white"' if background else ""
+            legend.append(f'<span class="attendance-badge"{style}>{label}</span>')
+        legend.append("</div>")
+        st.html("".join(legend))
 
         daily_view_tab, summary_view_tab = st.tabs([
             f"Daily Attendance ({num_days} day{'s' if num_days > 1 else ''})",
@@ -2364,8 +2171,7 @@ if report_snapshot:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
         with summary_download_tab:
-            st.markdown(f"<small style='color:{MUTED}'>One row per employee — days present/absent, average check-in/out, total hours worked across the selected period.</small>",
-                        unsafe_allow_html=True)
+            st.caption("One row per employee — days present/absent, average check-in/out, total hours worked across the selected period.")
             d1,d2,d3=st.columns(3)
             with d1:
                 st.download_button("Download Word (.docx)",data=docx_summ,
@@ -2380,4 +2186,4 @@ if report_snapshot:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 st.markdown("---")
-st.markdown(f"<small style='color:{MUTED}'>{site_cfg['label']} Shift Report System · Version {ENROLLMENT_RELEASE}</small>",unsafe_allow_html=True)
+st.caption(f"{site_cfg['label']} Shift Report System · Version {ENROLLMENT_RELEASE}")

@@ -173,7 +173,7 @@ class InterfaceTests(unittest.TestCase):
             at = AppTest.from_file(str(Path(__file__).parents[1] / 'App.py'), default_timeout=30).run()
             self.assertFalse(at.exception)
             relaunch.assert_not_called()
-            self.assertTrue(any('Version 2026.10.22.3' in item.value for item in at.markdown))
+            self.assertTrue(any('Version 2026.10.22.3' in item.value for item in at.caption))
 
     def test_lunch_button_is_on_right_and_only_visible_for_buguruni(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'_APP_LAUNCHED': '1', 'ROSTER_DB_PATH': folder+'/roster.db'}):
