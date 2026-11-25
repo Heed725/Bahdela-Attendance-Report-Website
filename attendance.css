@@ -4,7 +4,11 @@
   --report-border: light-dark(#DDCFD4, #494356);
   --report-muted: light-dark(#665764, #C7BDCF);
   --report-accent: light-dark(var(--report-brand), #FFB7BA);
-  --report-selected: color-mix(in srgb, var(--report-brand) 10%, var(--report-surface));
+  --report-selected: light-dark(
+    color-mix(in srgb, var(--report-brand) 8%, var(--report-surface)),
+    color-mix(in srgb, var(--report-brand) 20%, var(--report-surface))
+  );
+  --report-hover: color-mix(in srgb, var(--report-selected) 55%, var(--report-surface));
 }
 
 .stMainBlockContainer {
@@ -49,51 +53,47 @@
   background: var(--report-surface);
 }
 
-.st-key-site_selector_row label:hover,
-.st-key-site_selector_row label:has(input:checked) {
-  border-color: var(--report-brand);
-}
-
-.st-key-site_selector_row label:has(input:checked) {
-  background: var(--report-selected);
-  color: var(--report-accent);
-  font-weight: 700;
-}
-
-.st-key-site_selector_row label:has(input:focus-visible) {
-  outline: 2px solid var(--report-accent);
-  outline-offset: 2px;
-}
-
 .stTabs [role="tab"] {
   min-height: 42px;
   margin-block: 0.2rem 0.4rem;
   padding: 0.45rem 0.85rem;
-  border: 1px solid var(--report-brand);
   border-radius: 0.625rem;
+  font-weight: 700;
+}
+
+.stTabs [role="tab"],
+.stDownloadButton > button:not(:disabled),
+.st-key-buguruni_lunch_report button:not(:disabled) {
+  border: 1px solid var(--report-border);
   background: var(--report-surface);
+  color: inherit;
+}
+
+.st-key-site_selector_row label:hover,
+.stTabs [role="tab"]:hover,
+.stDownloadButton > button:not(:disabled):hover,
+.st-key-buguruni_lunch_report button:not(:disabled):hover {
+  border-color: var(--report-brand);
+  background: var(--report-hover);
+  color: var(--report-accent);
+}
+
+.st-key-site_selector_row label:has(input:checked),
+.stTabs [role="tab"][aria-selected="true"] {
+  border-color: var(--report-brand);
+  background: var(--report-selected);
   color: var(--report-accent);
   font-weight: 700;
 }
 
-.stTabs [role="tab"]:hover {
-  background: var(--report-selected);
-}
-
-.stTabs [role="tab"][aria-selected="true"],
-.stDownloadButton > button:not(:disabled),
-.st-key-buguruni_lunch_report button:not(:disabled) {
-  border-color: var(--report-brand);
-  background: var(--report-brand);
-  color: #FFFFFF;
-}
-
+.st-key-site_selector_row label p,
 .stTabs [role="tab"] p,
 .stDownloadButton > button:not(:disabled) p,
 .st-key-buguruni_lunch_report button:not(:disabled) p {
   color: inherit;
 }
 
+.st-key-site_selector_row label:has(input:focus-visible),
 .stTabs [role="tab"]:focus-visible,
 .stDownloadButton > button:focus-visible,
 .st-key-buguruni_lunch_report button:focus-visible {
